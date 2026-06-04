@@ -17,6 +17,7 @@
 
 <script>
 let map;
+let roadsLayer;
 
 function labelPolygonsByField(fileName, fieldName) {
 
@@ -131,6 +132,10 @@ labelPolygonsByField("alaia.geojson", "landusecode");
   loadFutureGWB();
 
   loadRoadsLayer();
+  setTimeout(() => {
+  roadsLayer.setMap(null);
+  roadsLayer.setMap(map);
+}, 1000);
 }
 
 function loadLayer(fileName, styleOptions) {
@@ -217,7 +222,7 @@ function loadRoadsLayer() {
       fillOpacity: 1
     };
   });
-
+  roadsLayer = layer;
   layer.setMap(map);
 }
 
