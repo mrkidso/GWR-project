@@ -130,12 +130,7 @@ labelPolygonsByField("alaia.geojson", "landusecode");
 
   loadFutureGWB();
 
-  loadLayer("roads.geojson", {
-    strokeColor: "#9C9C9C",
-    strokeWeight: 3,
-    fillColor: "#9C9C9C",
-    fillOpacity: 1
-  });
+  loadRoadsLayer();
 }
 
 function loadLayer(fileName, styleOptions) {
@@ -194,6 +189,32 @@ function loadAlaiaLayer() {
       strokeOpacity: 1,
       fillColor: fillColor,
       fillOpacity: 0.65
+    };
+  });
+
+  layer.setMap(map);
+}
+
+function loadRoadsLayer() {
+  const layer = new google.maps.Data();
+
+  layer.loadGeoJson("roads.geojson");
+
+  layer.setStyle(function(feature) {
+    const surfaceType = feature.getProperty("surftype");
+
+    let color = "#9C9C9C";
+
+    if (surfaceType === "Concrete") {
+      color = "#E1E1E1";
+    }
+
+    return {
+      strokeColor: color,
+      strokeWeight: 3,
+      strokeOpacity: 1,
+      fillColor: color,
+      fillOpacity: 1
     };
   });
 
