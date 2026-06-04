@@ -84,9 +84,9 @@ function initMap() {
 
 loadLayer("city.geojson", {
   strokeColor: "#FF0000",
-  strokeWeight: 4,
-  fillOpacity: 0,
-  dotted: true
+  strokeWeight: 5,
+  strokeOpacity: 1,
+  fillOpacity: 0
 });
   
   loadLayer("ARA.geojson", {
@@ -150,23 +150,6 @@ function loadLayer(fileName, styleOptions) {
     fillColor: styleOptions.fillColor || styleOptions.strokeColor || "#FFFFFF",
     fillOpacity: styleOptions.fillOpacity ?? 0
   };
-
-if (styleOptions.dotted) {
-
-  style.strokeOpacity = 0;
-
-  style.icons = [{
-    icon: {
-      path: "M 0,-1 0,1",
-      strokeColor: styleOptions.strokeColor,
-      strokeOpacity: 1,
-      strokeWeight: styleOptions.strokeWeight || 4,
-      scale: 4
-    },
-    offset: "0",
-    repeat: "12px"
-  }];
-}
 
   layer.setStyle(style);
   layer.setMap(map);
