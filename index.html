@@ -94,11 +94,7 @@ function initMap() {
     fillOpacity: 0
   });
 
-  loadLayer("alaia.geojson", {
-    strokeColor: "#FF00FF",
-    strokeWeight: 3,
-    fillOpacity: 0
-  });
+loadAlaiaLayer();
 labelPolygonsByField("alaia.geojson", "landusecode");
   loadLayer("GLW_Long_Valley_trails.geojson", {
     strokeColor: "#00FF00",
@@ -150,6 +146,50 @@ function loadLayer(fileName, styleOptions) {
 
   layer.setMap(map);
   return layer;
+}
+
+function loadAlaiaLayer() {
+
+  const layer = new google.maps.Data();
+
+  layer.loadGeoJson("alaia.geojson");
+
+  layer.setStyle(function(feature) {
+
+    const code = feature.getProperty("landusecode");
+
+    let fillColor = "#FFFFFF";
+
+    switch (code) {
+
+      case "CCOM":
+        fillColor = "#E60000";
+        break;
+
+      case "LD":
+        fillColor = "#FCFBD2";
+        break;
+
+      case "P":
+        fillColor = "#00734C";
+        break;
+
+      case "VLD":
+        fillColor = "#D3FFBE";
+        break;
+
+    }
+
+    return {
+      strokeColor: "#000000",
+      strokeWeight: 2,
+      strokeOpacity: 1,
+      fillColor: fillColor,
+      fillOpacity: 0.65
+    };
+  });
+
+  layer.setMap(map);
 }
 
 function loadFutureGWB() {
