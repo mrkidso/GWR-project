@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>George Washington Blvd Corridor Exhibit</title>
-
+  <title>GWR Project</title>
+  <meta charset="utf-8" />
   <style>
     html, body, #map {
       height: 100%;
@@ -13,26 +13,116 @@
   </style>
 </head>
 <body>
-
 <div id="map"></div>
 
 <script>
-function initMap() {
+let map;
 
-  const map = new google.maps.Map(document.getElementById("map"), {
-    center: { lat: 37.14, lng: -113.50 },
+function initMap() {
+  map = new google.maps.Map(document.getElementById("map"), {
+    center: { lat: 37.13, lng: -113.48 },
     zoom: 13,
     mapTypeId: "satellite",
-    disableDefaultUI: true,
+    disableDefaultUI: false,
     tilt: 0
   });
 
+  loadLayer("ARA.geojson", {
+    strokeColor: "#00FFFF",
+    strokeWeight: 3,
+    fillOpacity: 0
+  });
+
+  loadLayer("RWS.geojson", {
+    strokeColor: "#FFFF00",
+    strokeWeight: 3,
+    fillOpacity: 0
+  });
+
+  loadLayer("alaia.geojson", {
+    strokeColor: "#FF00FF",
+    strokeWeight: 3,
+    fillOpacity: 0
+  });
+
+  loadLayer("GLW_Long_Valley_trails.geojson", {
+    strokeColor: "#00FF00",
+    strokeWeight: 3,
+    fillOpacity: 0
+  });
+
+  loadLayer("Long_Valley_trails.geojson", {
+    strokeColor: "#FFA500",
+    strokeWeight: 3,
+    fillOpacity: 0
+  });
+
+  loadLayer("bounding Box.geojson", {
+    strokeColor: "#FFFFFF",
+    strokeWeight: 3,
+    fillOpacity: 0
+  });
+
+  loadLayer("commercial.geojson", {
+    strokeColor: "#E60000",
+    strokeWeight: 2,
+    fillColor: "#E60000",
+    fillOpacity: 0.55
+  });
+
+  loadFutureGWB();
+
+  loadLayer("roads.geojson", {
+    strokeColor: "#9C9C9C",
+    strokeWeight: 3,
+    fillColor: "#9C9C9C",
+    fillOpacity: 0.45
+  });
+}
+
+function loadLayer(fileName, styleOptions) {
+  const layer = new google.maps.Data();
+
+  layer.loadGeoJson(fileName);
+
+  layer.setStyle({
+    strokeColor: styleOptions.strokeColor || "#FFFFFF",
+    strokeOpacity: 1,
+    strokeWeight: styleOptions.strokeWeight || 3,
+    fillColor: styleOptions.fillColor || styleOptions.strokeColor || "#FFFFFF",
+    fillOpacity: styleOptions.fillOpacity ?? 0
+  });
+
+  layer.setMap(map);
+  return layer;
+}
+
+function loadFutureGWB() {
+  const layer = new google.maps.Data();
+
+  layer.loadGeoJson("futureGWB.geojson", null, function(features) {
+    // Longer feature = red, shorter feature = blue
+    features.forEach((feature, index) => {
+      feature.setProperty("gwbColor", index === 0 ? "#E60000" : "#0000FF");
+    });
+  });
+
+  layer.setStyle(function(feature) {
+    return {
+      strokeColor: feature.getProperty("gwbColor") || "#E60000",
+      strokeOpacity: 1,
+      strokeWeight: 5,
+      fillColor: feature.getProperty("gwbColor") || "#E60000",
+      fillOpacity: 0.55
+    };
+  });
+
+  layer.setMap(map);
 }
 </script>
 
 <script async
-src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBLQdEBPkVAA460UQu0tla8lJuOJQew_Tc&callback=initMap">
+  src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBLQdEBPkVAA460UQu0tla8lJuOJQew_Tc&callback=initMap">
 </script>
-
 </body>
 </html>
