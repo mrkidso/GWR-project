@@ -82,6 +82,13 @@ function initMap() {
     tilt: 0
   });
 
+loadLayer("city.geojson", {
+  strokeColor: "#FF0000",
+  strokeWeight: 4,
+  fillOpacity: 0,
+  dotted: true
+});
+  
   loadLayer("ARA.geojson", {
     strokeColor: "#00FFFF",
     strokeWeight: 3,
@@ -136,14 +143,32 @@ function loadLayer(fileName, styleOptions) {
 
   layer.loadGeoJson(fileName);
 
-  layer.setStyle({
+  const style = {
     strokeColor: styleOptions.strokeColor || "#FFFFFF",
-    strokeOpacity: 1,
+    strokeOpacity: styleOptions.strokeOpacity ?? 1,
     strokeWeight: styleOptions.strokeWeight || 3,
     fillColor: styleOptions.fillColor || styleOptions.strokeColor || "#FFFFFF",
     fillOpacity: styleOptions.fillOpacity ?? 0
-  });
+  };
 
+if (styleOptions.dotted) {
+
+  style.strokeOpacity = 0;
+
+  style.icons = [{
+    icon: {
+      path: "M 0,-1 0,1",
+      strokeColor: styleOptions.strokeColor,
+      strokeOpacity: 1,
+      strokeWeight: styleOptions.strokeWeight || 4,
+      scale: 4
+    },
+    offset: "0",
+    repeat: "12px"
+  }];
+}
+
+  layer.setStyle(style);
   layer.setMap(map);
   return layer;
 }
