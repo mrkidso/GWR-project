@@ -18,6 +18,61 @@
 <script>
 let map;
 
+function labelPolygonsByField(fileName, fieldName) {
+
+  fetch(fileName)
+    .then(response => response.json())
+    .then(data => {
+
+      data.features.forEach(feature => {
+
+        if (!feature.geometry) return;
+
+        let coords;
+
+        if (feature.geometry.type === "Polygon") {
+          coords = feature.geometry.coordinates[0];
+        }
+        else if (feature.geometry.type === "MultiPolygon") {
+          coords = feature.geometry.coordinates[0][0];
+        }
+        else {
+          return;
+        }
+
+        let latSum = 0;
+        let lngSum = 0;
+
+        coords.forEach(coord => {
+          lngSum += coord[0];
+          latSum += coord[1];
+        });
+
+        const center = {
+          lat: latSum / coords.length,
+          lng: lngSum / coords.length
+        };
+
+        new google.maps.Marker({
+          position: center,
+          map: map,
+          icon: {
+            path: google.maps.SymbolPath.CIRCLE,
+            scale: 0
+          },
+          label: {
+            text: String(feature.properties[fieldName] || ""),
+            color: "#000000",
+            fontSize: "12px",
+            fontWeight: "bold"
+          }
+        });
+
+      });
+
+    });
+}
+  
 function initMap() {
   map = new google.maps.Map(document.getElementById("map"), {
     center: { lat: 37.13, lng: -113.48 },
@@ -44,7 +99,7 @@ function initMap() {
     strokeWeight: 3,
     fillOpacity: 0
   });
-
+labelPolygonsByField("alaia.geojson", "landusecode");
   loadLayer("GLW_Long_Valley_trails.geojson", {
     strokeColor: "#00FF00",
     strokeWeight: 3,
