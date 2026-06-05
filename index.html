@@ -153,6 +153,11 @@
       max-width: none;
       min-width: 0;
       padding: 0;
+      transform: translate(-50%, -50%) scale(1) !important;
+    }
+
+    .map-label.scale-bar .resize-handle {
+      display: none !important;
     }
 
     .north-arrow {
@@ -1443,6 +1448,14 @@ function addAdjustableMapFurniture(id, position, html, className, options = {}) 
   const saved = getSavedPositions(FURNITURE_STORAGE_KEY, id);
   const startPosition = saved?.position || saved || position;
   const isResizable = options.resizable ?? true;
+
+  if (!isResizable && saved?.scale && saved.scale !== 1) {
+    savePositions(FURNITURE_STORAGE_KEY, id, {
+      position: normalizePoint(startPosition),
+      scale: 1
+    });
+  }
+
   const startScale = isResizable ? (saved?.scale || 1) : 1;
 
   const saveFurniture = (nextPosition = startPosition, nextScale = startScale) => {
@@ -1501,17 +1514,17 @@ function updateScaleBar() {
   const zoom = map.getZoom();
   if (!center || typeof zoom !== "number") return;
 
+  // This scale bar is intentionally fixed to exactly 1 mile.
+  // The on-screen width changes as the map scale/latitude changes, but the label stays 1 mile.
   const latitude = center.lat();
   const metersPerPixel = 156543.03392 * Math.cos(latitude * Math.PI / 180) / Math.pow(2, zoom);
-  const maxBarWidthPixels = 220;
-  const maxMiles = metersPerPixel * maxBarWidthPixels / 1609.344;
-  const scaleMiles = getNiceScaleDistance(maxMiles);
-  const scaleWidthPixels = Math.max(70, Math.min(maxBarWidthPixels, scaleMiles * 1609.344 / metersPerPixel));
+  const scaleMiles = 1;
+  const scaleWidthPixels = scaleMiles * 1609.344 / metersPerPixel;
 
   scaleBar.style.setProperty("--dynamic-scale-width", `${scaleWidthPixels}px`);
 
   const distanceLabel = scaleBar.querySelector(".dynamic-scale-distance");
-  if (distanceLabel) distanceLabel.textContent = formatScaleDistance(scaleMiles);
+  if (distanceLabel) distanceLabel.textContent = "1";
 }
 
 function initDynamicScaleBarUpdates() {
@@ -1540,7 +1553,7 @@ function addExhibitControls() {
           <span></span><span></span><span></span><span></span>
         </div>
       </div>
-      <div class="dynamic-scale-units">Miles</div>
+      <div class="dynamic-scale-units">Mile</div>
     </div>
   `, "scale-bar", { resizable: false, onPositionChanged: updateScaleBar });
 
