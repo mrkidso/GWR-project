@@ -230,6 +230,60 @@
       padding-bottom: 1px;
     }
 
+    .dynamic-scale-bar-art {
+      align-items: flex-end;
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid rgba(20, 20, 20, 0.35);
+      color: #000000;
+      display: inline-flex;
+      font-family: Arial, sans-serif;
+      gap: 8px;
+      padding: 5px 8px 6px;
+      transform: rotate(-1.25deg);
+      transform-origin: center;
+    }
+
+    .dynamic-scale-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .dynamic-scale-labels {
+      align-items: flex-end;
+      display: flex;
+      font-size: 14px;
+      justify-content: space-between;
+      line-height: 1;
+      width: var(--dynamic-scale-width, 200px);
+    }
+
+    .dynamic-scale-blocks {
+      border: 2px solid #000000;
+      box-sizing: border-box;
+      display: flex;
+      height: 18px;
+      width: var(--dynamic-scale-width, 200px);
+    }
+
+    .dynamic-scale-blocks span {
+      flex: 1;
+    }
+
+    .dynamic-scale-blocks span:nth-child(odd) {
+      background: #000000;
+    }
+
+    .dynamic-scale-blocks span:nth-child(even) {
+      background: #ffffff;
+    }
+
+    .dynamic-scale-units {
+      font-size: 14px;
+      line-height: 1;
+      padding-bottom: 2px;
+    }
+
     .legend-row {
       align-items: center;
       display: flex;
@@ -293,6 +347,11 @@
     }
 
     body.print-view .scale-bar-art {
+      transform: rotate(0deg);
+    }
+
+
+    body.print-view .dynamic-scale-bar-art {
       transform: rotate(0deg);
     }
 
@@ -913,6 +972,7 @@ function setMapToExactBounds(bounds) {
   });
 
   map.setZoom(zoom);
+  window.setTimeout(updateScaleBar, 0);
 }
 
 function fitMapToBoundingBox() {
@@ -1379,54 +1439,110 @@ function addCallout(labelPosition, targetPosition, html, className = "callout", 
   });
 }
 
-function addAdjustableMapFurniture(id, position, html, className) {
+function addAdjustableMapFurniture(id, position, html, className, options = {}) {
   const saved = getSavedPositions(FURNITURE_STORAGE_KEY, id);
   const startPosition = saved?.position || saved || position;
-  const startScale = saved?.scale || 1;
+  const isResizable = options.resizable ?? true;
+  const startScale = isResizable ? (saved?.scale || 1) : 1;
 
   const saveFurniture = (nextPosition = startPosition, nextScale = startScale) => {
     savePositions(FURNITURE_STORAGE_KEY, id, {
       position: normalizePoint(nextPosition),
-      scale: nextScale
+      scale: isResizable ? nextScale : 1
     });
   };
 
   return addHtmlMapLabel(startPosition, html, className, {
     draggable: true,
-    resizable: true,
+    resizable: isResizable,
     scale: startScale,
     onPositionChanged: newPosition => {
       const savedNow = getSavedPositions(FURNITURE_STORAGE_KEY, id);
-      saveFurniture(newPosition, savedNow?.scale || startScale);
+      saveFurniture(newPosition, isResizable ? (savedNow?.scale || startScale) : 1);
+      if (options.onPositionChanged) options.onPositionChanged(newPosition);
     },
     onScaleChanged: scale => {
+      if (!isResizable) return;
       const savedNow = getSavedPositions(FURNITURE_STORAGE_KEY, id);
       saveFurniture(savedNow?.position || startPosition, scale);
+      if (options.onScaleChanged) options.onScaleChanged(scale);
     }
   });
+}
+
+function getNiceScaleDistance(maxMiles) {
+  if (!Number.isFinite(maxMiles) || maxMiles <= 0) return 1;
+
+  const powers = [-3, -2, -1, 0, 1, 2, 3];
+  const multipliers = [1, 2, 5];
+  let best = 0.1;
+
+  powers.forEach(power => {
+    multipliers.forEach(multiplier => {
+      const candidate = multiplier * Math.pow(10, power);
+      if (candidate <= maxMiles && candidate > best) best = candidate;
+    });
+  });
+
+  return best;
+}
+
+function formatScaleDistance(miles) {
+  if (miles >= 10) return `${Math.round(miles)}`;
+  if (miles >= 1) return `${Number(miles.toFixed(1))}`;
+  return `${Number(miles.toFixed(2))}`;
+}
+
+function updateScaleBar() {
+  const scaleBar = document.getElementById("dynamic-scale-bar");
+  if (!scaleBar || !map) return;
+
+  const center = map.getCenter();
+  const zoom = map.getZoom();
+  if (!center || typeof zoom !== "number") return;
+
+  const latitude = center.lat();
+  const metersPerPixel = 156543.03392 * Math.cos(latitude * Math.PI / 180) / Math.pow(2, zoom);
+  const maxBarWidthPixels = 220;
+  const maxMiles = metersPerPixel * maxBarWidthPixels / 1609.344;
+  const scaleMiles = getNiceScaleDistance(maxMiles);
+  const scaleWidthPixels = Math.max(70, Math.min(maxBarWidthPixels, scaleMiles * 1609.344 / metersPerPixel));
+
+  scaleBar.style.setProperty("--dynamic-scale-width", `${scaleWidthPixels}px`);
+
+  const distanceLabel = scaleBar.querySelector(".dynamic-scale-distance");
+  if (distanceLabel) distanceLabel.textContent = formatScaleDistance(scaleMiles);
+}
+
+function initDynamicScaleBarUpdates() {
+  if (!map) return;
+
+  map.addListener("zoom_changed", () => window.setTimeout(updateScaleBar, 0));
+  map.addListener("center_changed", () => window.setTimeout(updateScaleBar, 0));
+  map.addListener("idle", updateScaleBar);
+  window.addEventListener("resize", updateScaleBar);
+
+  window.setTimeout(updateScaleBar, 100);
+  window.setTimeout(updateScaleBar, 500);
 }
 
 function addExhibitControls() {
   addAdjustableMapFurniture("northArrow", { lng: -113.5965, lat: 37.1000 }, "N<br>&uarr;", "map-control north-arrow");
 
   addAdjustableMapFurniture("scaleBar", { lng: -113.5750, lat: 37.0410 }, `
-    <div class="scale-bar-art">
-      <div class="scale-stack">
-        <div class="scale-labels">
+    <div id="dynamic-scale-bar" class="dynamic-scale-bar-art">
+      <div class="dynamic-scale-stack">
+        <div class="dynamic-scale-labels">
           <span>0</span>
-          <span>0.25</span>
-          <span>0.5</span>
-          <span>0.75</span>
-          <span>1</span>
+          <span class="dynamic-scale-distance">Loading...</span>
         </div>
-        <div class="scale-blocks">
-          <span></span><span></span><span></span><span></span><span></span>
-          <span></span><span></span><span></span><span></span><span></span>
+        <div class="dynamic-scale-blocks">
+          <span></span><span></span><span></span><span></span>
         </div>
       </div>
-      <div class="scale-units">Miles</div>
+      <div class="dynamic-scale-units">Miles</div>
     </div>
-  `, "scale-bar");
+  `, "scale-bar", { resizable: false, onPositionChanged: updateScaleBar });
 
   addAdjustableMapFurniture("legend", { lng: -113.4805, lat: 37.0426 }, `
     <strong>Legend</strong>
@@ -1732,6 +1848,7 @@ function calculateRouteMileages() {
 function loadExhibitAnnotations() {
   fitMapToBoundingBox();
   addExhibitControls();
+  initDynamicScaleBarUpdates();
   calculateRouteMileages()
     .catch(error => {
       console.warn("Could not calculate route mileages. Falling back to pending labels.", error);
