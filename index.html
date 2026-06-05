@@ -19,6 +19,12 @@
 let map;
 let roadsLayer;
 
+const LAYER_Z_INDEX = {
+  default: 10,
+  roads: 90,
+  city: 100
+};
+
 function labelPolygonsByField(fileName, fieldName) {
 
   fetch(fileName)
@@ -87,7 +93,8 @@ loadLayer("city.geojson", {
   strokeColor: "#FF0000",
   strokeWeight: 5,
   strokeOpacity: 1,
-  fillOpacity: 0
+  fillOpacity: 0,
+  zIndex: LAYER_Z_INDEX.city
 });
   
   loadLayer("ARA.geojson", {
@@ -132,10 +139,6 @@ labelPolygonsByField("alaia.geojson", "landusecode");
   loadFutureGWB();
 
   loadRoadsLayer();
-  setTimeout(() => {
-  roadsLayer.setMap(null);
-  roadsLayer.setMap(map);
-}, 1000);
 }
 
 function loadLayer(fileName, styleOptions) {
@@ -148,7 +151,8 @@ function loadLayer(fileName, styleOptions) {
     strokeOpacity: styleOptions.strokeOpacity ?? 1,
     strokeWeight: styleOptions.strokeWeight || 3,
     fillColor: styleOptions.fillColor || styleOptions.strokeColor || "#FFFFFF",
-    fillOpacity: styleOptions.fillOpacity ?? 0
+    fillOpacity: styleOptions.fillOpacity ?? 0,
+    zIndex: styleOptions.zIndex ?? LAYER_Z_INDEX.default
   };
 
   layer.setStyle(style);
@@ -193,7 +197,8 @@ function loadAlaiaLayer() {
       strokeWeight: 2,
       strokeOpacity: 1,
       fillColor: fillColor,
-      fillOpacity: 0.65
+      fillOpacity: 0.65,
+      zIndex: LAYER_Z_INDEX.default
     };
   });
 
@@ -219,7 +224,8 @@ function loadRoadsLayer() {
       strokeWeight: 3,
       strokeOpacity: 1,
       fillColor: color,
-      fillOpacity: 1
+      fillOpacity: 1,
+      zIndex: LAYER_Z_INDEX.roads
     };
   });
   roadsLayer = layer;
@@ -242,7 +248,8 @@ function loadFutureGWB() {
       strokeOpacity: 1,
       strokeWeight: 5,
       fillColor: feature.getProperty("gwbColor") || "#E60000",
-      fillOpacity: 0.55
+      fillOpacity: 0.55,
+      zIndex: LAYER_Z_INDEX.default
     };
   });
 
