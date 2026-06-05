@@ -558,6 +558,10 @@ function labelGLWLongValleyLayer() {
       const labelText = String(feature.properties.landusecode || "");
       const center = getFeatureCenterInsideBounds(feature, printBounds) || getFeatureLabelCenter(feature);
 
+      if (labelText === "LD") {
+        center.lng = Math.min(center.lng, printBounds.maxLng - 0.0028);
+      }
+
       addMapLabel(labelText, center);
     });
   });
