@@ -732,6 +732,25 @@
       padding-bottom: 1px;
     }
 
+    .phase-inset-leader-layer {
+      height: 11in;
+      left: 0;
+      overflow: visible;
+      pointer-events: none;
+      position: absolute;
+      top: 0;
+      width: 17in;
+      z-index: 3;
+    }
+
+    .phase-inset-leader-line {
+      fill: none;
+      stroke: #1f2933;
+      stroke-opacity: 0.9;
+      stroke-width: 1.6;
+    }
+
+
     @page {
       margin: 0;
       size: 17in 11in;
@@ -773,6 +792,7 @@ if (new URLSearchParams(window.location.search).get("print") === "1") {
       </div>
     </div>
   </div>
+  <svg id="phaseInsetLeaderLayer" class="phase-inset-leader-layer" aria-hidden="true"></svg>
   <div class="phase-inset phase-one" data-phase-inset-id="phase1">
     <div class="phase-inset-title">
       <span>Phase 1</span>
@@ -819,6 +839,8 @@ let map;
 let roadsLayer;
 let roadsInfoWindow;
 let selectedRoadFeature;
+let mainMapProjectionOverlay;
+const phaseInsetLeaders = {};
 const phaseInsetMaps = {};
 const phaseInsetBounds = {};
 const phaseInsetRefreshTimers = {};
@@ -860,6 +882,11 @@ const EXHIBIT_POINTS = {
   phase3: { lng: -113.5627, lat: 37.0850 }
 };
 
+const PHASE_INSET_ARROW_DEFAULT_TARGETS = {
+  phase1: EXHIBIT_POINTS.phase1,
+  phase2: EXHIBIT_POINTS.phase2
+};
+
 const ROUTE_MILES = {};
 const MILEAGE_ORIGIN_ID = "washingtonFieldsCommercial";
 const MILEAGE_DESTINATION_IDS = ["phase3", "longValleyTrails", "rws", "alaia", "ara", "airport"];
@@ -868,6 +895,7 @@ const MILEAGE_DESTINATION_IDS = ["phase3", "longValleyTrails", "rws", "alaia", "
 const CALLOUT_STORAGE_KEY = "gwrExhibitCallouts";
 const FURNITURE_STORAGE_KEY = "gwrExhibitFurniture";
 const PHASE_INSET_STORAGE_KEY = "gwrPhaseInsetFrames";
+const PHASE_INSET_ARROW_STORAGE_KEY = "gwrPhaseInsetArrows";
 const IS_PRINT_VIEW = new URLSearchParams(window.location.search).get("print") === "1";
 
 const LAND_USE_COLORS = {
@@ -1480,6 +1508,7 @@ function refreshPhaseInsetMap(id) {
     google.maps.event.trigger(insetMap, "resize");
     fitInsetMapToPhaseWidth(insetMap, bounds);
     updatePhaseInsetScale(id);
+    updatePhaseInsetLeader(id);
   }, 80);
 }
 
@@ -1518,11 +1547,13 @@ function enablePhaseInsetDrag(inset, id) {
     const move = moveEvent => {
       inset.style.left = `${startLeft + moveEvent.clientX - startMouse.x}px`;
       inset.style.top = `${startTop + moveEvent.clientY - startMouse.y}px`;
+      updatePhaseInsetLeader(id);
     };
 
     const up = () => {
       savePhaseInsetFrame(id, inset);
       refreshPhaseInsetMap(id);
+      updatePhaseInsetLeader(id);
       document.removeEventListener("mousemove", move);
       document.removeEventListener("mouseup", up);
     };
@@ -1572,11 +1603,13 @@ function enablePhaseInsetResize(inset, handle, id, corner) {
       inset.style.width = `${nextWidth}px`;
       inset.style.height = `${nextHeight}px`;
       refreshPhaseInsetMap(id);
+      updatePhaseInsetLeader(id);
     };
 
     const up = () => {
       savePhaseInsetFrame(id, inset);
       refreshPhaseInsetMap(id);
+      updatePhaseInsetLeader(id);
       document.removeEventListener("mousemove", move);
       document.removeEventListener("mouseup", up);
     };
@@ -1584,6 +1617,190 @@ function enablePhaseInsetResize(inset, handle, id, corner) {
     document.addEventListener("mousemove", move);
     document.addEventListener("mouseup", up);
   });
+}
+
+
+function ensurePhaseInsetLeaderLayer() {
+  let svg = document.getElementById("phaseInsetLeaderLayer");
+  if (svg) return svg;
+
+  const printPage = document.querySelector(".print-page");
+  if (!printPage) return null;
+
+  svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("id", "phaseInsetLeaderLayer");
+  svg.classList.add("phase-inset-leader-layer");
+  svg.setAttribute("aria-hidden", "true");
+  printPage.appendChild(svg);
+  return svg;
+}
+
+function ensurePhaseInsetArrowMarker(svg) {
+  if (!svg || svg.querySelector("#phaseInsetArrowHead")) return;
+
+  const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+  const marker = document.createElementNS("http://www.w3.org/2000/svg", "marker");
+  marker.setAttribute("id", "phaseInsetArrowHead");
+  marker.setAttribute("markerWidth", "9");
+  marker.setAttribute("markerHeight", "9");
+  marker.setAttribute("refX", "8");
+  marker.setAttribute("refY", "4.5");
+  marker.setAttribute("orient", "auto");
+  marker.setAttribute("markerUnits", "strokeWidth");
+
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute("d", "M 0 0 L 9 4.5 L 0 9 z");
+  path.setAttribute("fill", "#1f2933");
+  path.setAttribute("fill-opacity", "0.9");
+
+  marker.appendChild(path);
+  defs.appendChild(marker);
+  svg.appendChild(defs);
+}
+
+function ensureMainMapProjectionOverlay() {
+  if (mainMapProjectionOverlay) return mainMapProjectionOverlay;
+
+  mainMapProjectionOverlay = new google.maps.OverlayView();
+  mainMapProjectionOverlay.onAdd = function() {};
+  mainMapProjectionOverlay.draw = function() {};
+  mainMapProjectionOverlay.onRemove = function() {};
+  mainMapProjectionOverlay.setMap(map);
+
+  return mainMapProjectionOverlay;
+}
+
+function getPointRelativeToPrintPage(position) {
+  const overlay = ensureMainMapProjectionOverlay();
+  const projection = overlay.getProjection();
+  const printPage = document.querySelector(".print-page");
+  const mapDiv = document.getElementById("map");
+  if (!projection || !printPage || !mapDiv) return null;
+
+  const normalized = normalizePoint(position);
+  const divPixel = projection.fromLatLngToDivPixel(
+    new google.maps.LatLng(normalized.lat, normalized.lng)
+  );
+  if (!divPixel) return null;
+
+  const pageRect = printPage.getBoundingClientRect();
+  const mapRect = mapDiv.getBoundingClientRect();
+
+  return {
+    x: mapRect.left - pageRect.left + divPixel.x,
+    y: mapRect.top - pageRect.top + divPixel.y
+  };
+}
+
+function getInsetAnchorPoint(inset, targetPoint) {
+  const printPage = document.querySelector(".print-page");
+  if (!printPage || !inset || !targetPoint) return null;
+
+  const pageRect = printPage.getBoundingClientRect();
+  const insetRect = inset.getBoundingClientRect();
+  const left = insetRect.left - pageRect.left;
+  const right = insetRect.right - pageRect.left;
+  const top = insetRect.top - pageRect.top;
+  const bottom = insetRect.bottom - pageRect.top;
+  const clampedX = Math.min(Math.max(targetPoint.x, left), right);
+  const clampedY = Math.min(Math.max(targetPoint.y, top), bottom);
+
+  const candidates = [
+    { x: clampedX, y: top },
+    { x: clampedX, y: bottom },
+    { x: left, y: clampedY },
+    { x: right, y: clampedY }
+  ];
+
+  return candidates.reduce((best, candidate) => {
+    const distance = Math.hypot(candidate.x - targetPoint.x, candidate.y - targetPoint.y);
+    if (!best || distance < best.distance) return { ...candidate, distance };
+    return best;
+  }, null);
+}
+
+function getPhaseInsetArrowTarget(id) {
+  const saved = getSavedPositions(PHASE_INSET_ARROW_STORAGE_KEY, id);
+  return saved?.target || PHASE_INSET_ARROW_DEFAULT_TARGETS[id] || EXHIBIT_POINTS[id] || null;
+}
+
+function savePhaseInsetArrowTarget(id, target) {
+  savePositions(PHASE_INSET_ARROW_STORAGE_KEY, id, {
+    target: normalizePoint(target)
+  });
+}
+
+function updatePhaseInsetLeader(id) {
+  const leader = phaseInsetLeaders[id];
+  if (!leader) return;
+
+  const targetPoint = getPointRelativeToPrintPage(leader.marker.getPosition());
+  const anchorPoint = getInsetAnchorPoint(leader.inset, targetPoint);
+  if (!targetPoint || !anchorPoint) return;
+
+  leader.line.setAttribute("x1", anchorPoint.x);
+  leader.line.setAttribute("y1", anchorPoint.y);
+  leader.line.setAttribute("x2", targetPoint.x);
+  leader.line.setAttribute("y2", targetPoint.y);
+}
+
+function updateAllPhaseInsetLeaders() {
+  Object.keys(phaseInsetLeaders).forEach(updatePhaseInsetLeader);
+}
+
+function initPhaseInsetLeaders() {
+  if (!IS_PRINT_VIEW) return;
+
+  const svg = ensurePhaseInsetLeaderLayer();
+  if (!svg) return;
+  ensurePhaseInsetArrowMarker(svg);
+  ensureMainMapProjectionOverlay();
+
+  PHASE_INSET_CONFIGS.forEach(config => {
+    const inset = document.querySelector(`.phase-inset[data-phase-inset-id="${config.id}"]`);
+    if (!inset || phaseInsetLeaders[config.id]) return;
+
+    const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    line.classList.add("phase-inset-leader-line");
+    line.setAttribute("marker-end", "url(#phaseInsetArrowHead)");
+    svg.appendChild(line);
+
+    const marker = new google.maps.Marker({
+      position: getPhaseInsetArrowTarget(config.id),
+      map: map,
+      draggable: true,
+      title: "Drag to move the inset arrow tip",
+      icon: {
+        path: google.maps.SymbolPath.CIRCLE,
+        scale: 5,
+        fillColor: "#1f2933",
+        fillOpacity: 0.85,
+        strokeColor: "#FFFFFF",
+        strokeOpacity: 1,
+        strokeWeight: 1.5
+      },
+      zIndex: LAYER_Z_INDEX.exhibit + 60
+    });
+
+    marker.addListener("drag", event => {
+      savePhaseInsetArrowTarget(config.id, normalizePoint(event.latLng));
+      updatePhaseInsetLeader(config.id);
+    });
+
+    marker.addListener("dragend", event => {
+      savePhaseInsetArrowTarget(config.id, normalizePoint(event.latLng));
+      updatePhaseInsetLeader(config.id);
+    });
+
+    phaseInsetLeaders[config.id] = { inset, line, marker };
+  });
+
+  map.addListener("idle", updateAllPhaseInsetLeaders);
+  map.addListener("zoom_changed", () => window.setTimeout(updateAllPhaseInsetLeaders, 0));
+  map.addListener("center_changed", () => window.setTimeout(updateAllPhaseInsetLeaders, 0));
+  window.addEventListener("resize", updateAllPhaseInsetLeaders);
+  window.setTimeout(updateAllPhaseInsetLeaders, 100);
+  window.setTimeout(updateAllPhaseInsetLeaders, 500);
 }
 
 
@@ -2391,6 +2608,7 @@ function addPhaseInsetMaps() {
     fetch("city.geojson").then(response => response.json())
   ]).then(([roadsData, cityData]) => {
     PHASE_INSET_CONFIGS.forEach(config => createPhaseInsetMap(config, roadsData, cityData));
+    updateAllPhaseInsetLeaders();
   });
 }
 
@@ -2668,6 +2886,7 @@ function initMap() {
     setPrintFrameDate();
     initFrameAdjustables();
     initPhaseInsetAdjustables();
+    initPhaseInsetLeaders();
   }
 
   roadsInfoWindow = new google.maps.InfoWindow();
