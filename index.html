@@ -10,6 +10,89 @@
       margin: 0;
       padding: 0;
     }
+
+    .map-label {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      background: rgba(255, 255, 255, 0.88);
+      border: 1px solid rgba(36, 45, 55, 0.45);
+      border-radius: 4px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
+      color: #1f2933;
+      font-family: Arial, sans-serif;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.25;
+      max-width: 190px;
+      padding: 5px 7px;
+      pointer-events: none;
+      text-align: center;
+      white-space: normal;
+    }
+
+    .map-label.small {
+      font-size: 10px;
+      max-width: 120px;
+      padding: 3px 5px;
+    }
+
+    .map-label.phase {
+      border-width: 2px;
+      color: #111827;
+    }
+
+    .map-label.callout {
+      font-weight: 600;
+      text-align: left;
+    }
+
+    .map-label.measurement {
+      background: rgba(255, 249, 196, 0.9);
+      border-color: rgba(111, 78, 0, 0.6);
+      font-size: 9px;
+      padding: 2px 4px;
+    }
+
+    .map-control {
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid rgba(36, 45, 55, 0.35);
+      border-radius: 4px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.24);
+      color: #1f2933;
+      font-family: Arial, sans-serif;
+      font-size: 11px;
+      line-height: 1.25;
+      margin: 10px;
+      padding: 8px 10px;
+    }
+
+    .north-arrow {
+      font-size: 22px;
+      font-weight: 700;
+      text-align: center;
+    }
+
+    .scale-line {
+      border-bottom: 4px solid #1f2933;
+      border-left: 2px solid #1f2933;
+      border-right: 2px solid #1f2933;
+      height: 8px;
+      margin-top: 4px;
+      width: 96px;
+    }
+
+    .legend-row {
+      align-items: center;
+      display: flex;
+      gap: 6px;
+      margin: 3px 0;
+    }
+
+    .legend-swatch {
+      border: 1px solid rgba(31, 41, 51, 0.4);
+      height: 10px;
+      width: 18px;
+    }
   </style>
 </head>
 <body>
@@ -24,7 +107,25 @@ let selectedRoadFeature;
 const LAYER_Z_INDEX = {
   default: 10,
   roads: 90,
-  city: 100
+  exhibit: 120,
+  city: 150
+};
+
+const PHASE_ROAD_IDS = {
+  phase1: new Set([115015, 115016]),
+  phase2: new Set([506, 122218])
+};
+
+const EXHIBIT_POINTS = {
+  washingtonFieldsCommercial: { lng: -113.4866, lat: 37.0830 },
+  longValleyTrails: { lng: -113.4687, lat: 37.0945 },
+  alaia: { lng: -113.4940, lat: 37.0585 },
+  ara: { lng: -113.4943, lat: 37.0288 },
+  rws: { lng: -113.4882, lat: 37.0829 },
+  airport: { lng: -113.5092, lat: 37.0363 },
+  phase1: { lng: -113.5179, lat: 37.0852 },
+  phase2: { lng: -113.4986, lat: 37.0849 },
+  phase3: { lng: -113.5627, lat: 37.0850 }
 };
 
 const LAND_USE_COLORS = {
@@ -323,6 +424,211 @@ function getGeoJsonBounds(data) {
   });
 }
 
+function fitMapToBoundingBox() {
+  fetch("bounding Box.geojson")
+    .then(response => response.json())
+    .then(data => {
+      const bounds = getGeoJsonBounds(data);
+      map.fitBounds({
+        north: bounds.maxLat,
+        south: bounds.minLat,
+        east: bounds.maxLng,
+        west: bounds.minLng
+      });
+    });
+}
+
+function addHtmlMapLabel(position, html, className = "") {
+  const overlay = new google.maps.OverlayView();
+  let div;
+
+  overlay.onAdd = function() {
+    div = document.createElement("div");
+    div.className = `map-label ${className}`.trim();
+    div.innerHTML = html;
+    this.getPanes().overlayLayer.appendChild(div);
+  };
+
+  overlay.draw = function() {
+    const projection = this.getProjection();
+    const point = projection.fromLatLngToDivPixel(new google.maps.LatLng(position.lat, position.lng));
+
+    if (!point || !div) return;
+    div.style.left = `${point.x}px`;
+    div.style.top = `${point.y}px`;
+  };
+
+  overlay.onRemove = function() {
+    if (div) div.remove();
+  };
+
+  overlay.setMap(map);
+  return overlay;
+}
+
+function addExhibitControls() {
+  const northArrow = document.createElement("div");
+  northArrow.className = "map-control north-arrow";
+  northArrow.innerHTML = "N<br>&uarr;";
+  map.controls[google.maps.ControlPosition.LEFT_TOP].push(northArrow);
+
+  const scale = document.createElement("div");
+  scale.className = "map-control";
+  scale.innerHTML = `
+    <strong>Scale</strong><br>
+    1:30,000
+    <div class="scale-line"></div>
+    <div>0.5 mile approx.</div>
+  `;
+  map.controls[google.maps.ControlPosition.LEFT_BOTTOM].push(scale);
+
+  const legend = document.createElement("div");
+  legend.className = "map-control";
+  legend.innerHTML = `
+    <strong>Legend</strong>
+    <div class="legend-row"><span class="legend-swatch" style="background:#2563EB"></span>Phase 1</div>
+    <div class="legend-row"><span class="legend-swatch" style="background:#0F766E"></span>Phase 2</div>
+    <div class="legend-row"><span class="legend-swatch" style="background:#F97316"></span>Phase 3</div>
+    <div class="legend-row"><span class="legend-swatch" style="background:#00FFFF"></span>ARA / RWS</div>
+    <div class="legend-row"><span class="legend-swatch" style="background:#F04B4B"></span>Commercial</div>
+    <div class="legend-row"><span class="legend-swatch" style="background:#F7F7D8"></span>Long Valley Trails PCD</div>
+  `;
+  map.controls[google.maps.ControlPosition.RIGHT_BOTTOM].push(legend);
+}
+
+function addExhibitLabels() {
+  addHtmlMapLabel(EXHIBIT_POINTS.phase3, "Phase 3<br>GWB to Crosby Way<br>Began Feb. 2026<br>Completion July 2027", "phase callout");
+  addHtmlMapLabel(EXHIBIT_POINTS.phase1, "Phase 1<br>GWB corridor", "phase");
+  addHtmlMapLabel(EXHIBIT_POINTS.phase2, "Phase 2<br>Open now", "phase");
+  addHtmlMapLabel(EXHIBIT_POINTS.longValleyTrails, "Long Valley Trails PCD<br>Connection timing:<br>approx. 9-10 months", "callout");
+  addHtmlMapLabel(EXHIBIT_POINTS.alaia, "Alaia<br>approx. 1.7 mi from<br>Washington Fields Commercial", "callout");
+  addHtmlMapLabel(EXHIBIT_POINTS.ara, "ARA Southwest Logistics Center<br>Planned: approx. 5M SF<br>Completed: approx. 350K SF<br>2025-2026 construction: approx. 900K SF", "callout");
+  addHtmlMapLabel(EXHIBIT_POINTS.rws, "Regional Wheel's<br>Skate Park", "small");
+  addHtmlMapLabel(EXHIBIT_POINTS.airport, "SGU Airport<br>approx. 3.5 mi from<br>Washington Fields Commercial", "callout");
+  addHtmlMapLabel(EXHIBIT_POINTS.washingtonFieldsCommercial, "Washington Fields<br>Commercial Area", "callout");
+}
+
+function getRoadPhase(objectId) {
+  if (PHASE_ROAD_IDS.phase1.has(objectId)) return "phase1";
+  if (PHASE_ROAD_IDS.phase2.has(objectId)) return "phase2";
+  return null;
+}
+
+function getRoadPhaseStyle(phase) {
+  if (phase === "phase1") {
+    return {
+      strokeColor: "#2563EB",
+      strokeWeight: 4,
+      strokeOpacity: 1,
+      fillColor: "#2563EB",
+      fillOpacity: 0.92,
+      zIndex: LAYER_Z_INDEX.exhibit,
+      clickable: true
+    };
+  }
+
+  if (phase === "phase2") {
+    return {
+      strokeColor: "#0F766E",
+      strokeWeight: 4,
+      strokeOpacity: 1,
+      fillColor: "#0F766E",
+      fillOpacity: 0.92,
+      zIndex: LAYER_Z_INDEX.exhibit,
+      clickable: true
+    };
+  }
+
+  return null;
+}
+
+function getVerticalIntersections(ring, lng) {
+  const intersections = [];
+
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [lng1, lat1] = ring[j];
+    const [lng2, lat2] = ring[i];
+    const crossesLongitude = (lng1 <= lng && lng < lng2) || (lng2 <= lng && lng < lng1);
+
+    if (crossesLongitude) {
+      const ratio = (lng - lng1) / (lng2 - lng1);
+      intersections.push(lat1 + ratio * (lat2 - lat1));
+    }
+  }
+
+  return intersections.sort((first, second) => first - second);
+}
+
+function getRoadWidthSamples(feature) {
+  const bounds = getFeatureBounds(feature);
+  const samples = [];
+
+  for (let index = 1; index <= 5; index++) {
+    const lng = bounds.minLng + (bounds.maxLng - bounds.minLng) * index / 6;
+
+    getFeatureRings(feature).forEach(ring => {
+      const intersections = getVerticalIntersections(ring, lng);
+
+      for (let pair = 0; pair + 1 < intersections.length; pair += 2) {
+        const startLat = intersections[pair];
+        const endLat = intersections[pair + 1];
+        const feet = Math.round((endLat - startLat) * 364000);
+
+        if (feet <= 0) continue;
+        samples.push({
+          lng: lng,
+          startLat: startLat,
+          endLat: endLat,
+          feet: feet
+        });
+      }
+    });
+  }
+
+  return samples;
+}
+
+function addRoadWidthMeasurements() {
+  fetch("roads.geojson")
+    .then(response => response.json())
+    .then(data => {
+      const measurementIds = new Set([115015, 115016, 506, 122218]);
+
+      data.features
+        .filter(feature => measurementIds.has(feature.properties.objectid))
+        .forEach(feature => {
+          getRoadWidthSamples(feature).forEach(sample => {
+            const path = [
+              { lng: sample.lng, lat: sample.startLat },
+              { lng: sample.lng, lat: sample.endLat }
+            ];
+
+            new google.maps.Polyline({
+              path: path,
+              map: map,
+              strokeColor: "#FFF176",
+              strokeOpacity: 1,
+              strokeWeight: 2,
+              clickable: false,
+              zIndex: LAYER_Z_INDEX.exhibit + 20
+            });
+
+            addHtmlMapLabel({
+              lng: sample.lng,
+              lat: (sample.startLat + sample.endLat) / 2
+            }, `${sample.feet} ft`, "measurement");
+          });
+        });
+    });
+}
+
+function loadExhibitAnnotations() {
+  fitMapToBoundingBox();
+  addExhibitControls();
+  addExhibitLabels();
+  addRoadWidthMeasurements();
+}
+
 function addMapLabel(text, center) {
   new google.maps.Marker({
     position: center,
@@ -484,6 +790,7 @@ labelPolygonsByField("alaia.geojson", "landusecode", {
   loadFutureGWB();
 
   loadRoadsLayer();
+  loadExhibitAnnotations();
 }
 
 function loadLayer(fileName, styleOptions) {
@@ -614,6 +921,10 @@ function loadRoadsLayer() {
   layer.loadGeoJson("roads.geojson");
 
   layer.setStyle(function(feature) {
+    const phaseStyle = getRoadPhaseStyle(getRoadPhase(feature.getProperty("objectid")));
+
+    if (phaseStyle) return phaseStyle;
+
     const surfaceType = feature.getProperty("surftype");
 
     let color = "#9C9C9C";
@@ -662,7 +973,7 @@ function highlightRoadFeature(feature) {
     strokeOpacity: 1,
     strokeWeight: 6,
     fillOpacity: 1,
-    zIndex: LAYER_Z_INDEX.roads + 10
+    zIndex: LAYER_Z_INDEX.exhibit + 30
   });
 }
 
@@ -718,12 +1029,12 @@ function loadFutureGWB() {
 
   layer.setStyle(function(feature) {
     return {
-      strokeColor: feature.getProperty("gwbColor") || "#E60000",
+      strokeColor: "#F97316",
       strokeOpacity: 1,
       strokeWeight: 5,
-      fillColor: feature.getProperty("gwbColor") || "#E60000",
-      fillOpacity: 0.55,
-      zIndex: LAYER_Z_INDEX.default,
+      fillColor: "#F97316",
+      fillOpacity: 0.65,
+      zIndex: LAYER_Z_INDEX.exhibit,
       clickable: false
     };
   });
