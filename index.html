@@ -338,7 +338,7 @@
       font-family: "Times New Roman", serif;
       position: absolute;
       text-align: center;
-      transform: rotate(90deg);
+      transform: rotate(-90deg);
       transform-origin: center;
     }
 
@@ -378,9 +378,8 @@
       bottom: 0.12in;
       color: #111111;
       display: flex;
-      flex-direction: column;
-      font-family: "Times New Roman", serif;
-      gap: 0.03in;
+      flex-direction: row;
+      gap: 0.04in;
       height: 1.3in;
       justify-content: center;
       left: 0;
@@ -388,26 +387,37 @@
       width: 0.5in;
     }
 
+    .frame-logo-content {
+      align-items: center;
+      display: flex;
+      gap: 0.04in;
+      height: 0.36in;
+      justify-content: center;
+      transform: rotate(-90deg);
+      transform-origin: center;
+      width: 1.25in;
+    }
+
     .frame-logo-mark {
-      height: 0.23in;
-      width: 0.23in;
+      flex: 0 0 auto;
+      height: 0.24in;
+      width: 0.24in;
     }
 
     .frame-logo-text {
+      color: #111111;
+      font-family: "Times New Roman", serif;
       font-size: 18px;
       font-weight: 700;
       line-height: 0.9;
-      transform: rotate(90deg);
-      transform-origin: center;
       white-space: nowrap;
     }
 
     .frame-logo-small {
+      color: #111111;
+      font-family: Arial, sans-serif;
       font-size: 6px;
       line-height: 1;
-      margin-top: 0.2in;
-      transform: rotate(90deg);
-      transform-origin: center;
       white-space: nowrap;
     }
 
@@ -442,13 +452,18 @@ if (new URLSearchParams(window.location.search).get("print") === "1") {
     <div class="frame-panel-divider"></div>
     <div class="frame-gis">Washington City GIS<br>Washington County, Utah<br>435-656-6300</div>
     <div class="frame-logo">
-      <svg class="frame-logo-mark" viewBox="0 0 48 48" aria-hidden="true">
-        <circle cx="24" cy="24" r="20" fill="none" stroke="#111111" stroke-width="3"></circle>
-        <path d="M10 28 L19 16 L25 25 L30 18 L39 31" fill="none" stroke="#111111" stroke-width="3" stroke-linejoin="round"></path>
-        <path d="M16 34 C22 29 29 29 36 34" fill="none" stroke="#111111" stroke-width="3" stroke-linecap="round"></path>
-      </svg>
-      <div class="frame-logo-text">Washington<br>City</div>
-      <div class="frame-logo-small">Community &amp; Beauty</div>
+      <div class="frame-logo-content">
+        <svg class="frame-logo-mark" viewBox="0 0 64 64" aria-hidden="true">
+          <circle cx="32" cy="32" r="24" fill="none" stroke="#111111" stroke-width="4"></circle>
+          <path d="M17 35 C22 26 27 19 32 14 C33 22 35 28 41 34 C36 32 31 32 26 36 C24 42 21 46 15 49 C18 43 18 39 17 35 Z" fill="#111111"></path>
+          <path d="M31 15 C39 23 45 31 51 40 C43 35 36 34 28 39" fill="none" stroke="#111111" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"></path>
+          <path d="M17 49 C27 43 37 42 48 47" fill="none" stroke="#111111" stroke-width="4" stroke-linecap="round"></path>
+        </svg>
+        <div>
+          <div class="frame-logo-text">Washington<br>City</div>
+          <div class="frame-logo-small">Community &amp; Beauty</div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
