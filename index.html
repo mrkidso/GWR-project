@@ -80,7 +80,6 @@
       transform: translate(-50%, -50%);
     }
 
-    .map-label.north-arrow,
     .map-label.scale-bar {
       background: transparent;
       border: 0;
@@ -90,18 +89,16 @@
       padding: 0;
     }
 
-    .north-arrow-art {
-      height: 190px;
-      position: relative;
-      width: 130px;
+    .north-arrow {
+      font-size: 22px;
+      font-weight: 700;
+      text-align: center;
     }
 
-    .north-arrow-art img {
-      display: block;
-      filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.55));
-      height: 100%;
-      object-fit: contain;
-      width: 100%;
+    .map-label.north-arrow {
+      max-width: 44px;
+      min-width: 34px;
+      padding: 5px;
     }
 
     .scale-bar-art {
@@ -113,6 +110,8 @@
       font-family: Arial, sans-serif;
       gap: 6px;
       padding: 4px 7px 5px;
+      transform: rotate(-1.25deg);
+      transform-origin: center;
     }
 
     .scale-stack {
@@ -719,11 +718,7 @@ function addAdjustableMapFurniture(id, position, html, className) {
 }
 
 function addExhibitControls() {
-  addAdjustableMapFurniture("northArrow", { lng: -113.5965, lat: 37.1000 }, `
-    <div class="north-arrow-art">
-      <img src="assets/north-arrow-script.png" alt="North arrow">
-    </div>
-  `, "north-arrow");
+  addAdjustableMapFurniture("northArrow", { lng: -113.5965, lat: 37.1000 }, "N<br>&uarr;", "map-control north-arrow");
 
   addAdjustableMapFurniture("scaleBar", { lng: -113.5750, lat: 37.0410 }, `
     <div class="scale-bar-art">
