@@ -1044,8 +1044,10 @@ const EXHIBIT_POINTS = {
 };
 
 const PHASE_INSET_ARROW_DEFAULT_TARGETS = {
-  phase1: { offsetX: 34, offsetY: 34 },
-  phase2: { offsetX: 34, offsetY: 34 }
+  // Default page coordinates inside the 17x11 print page.
+  // These keep the handles visible and near their inset boxes on reload.
+  phase1: { x: 1040, y: 360 },
+  phase2: { x: 1260, y: 315 }
 };
 const ROUTE_MILES = {};
 const MILEAGE_ORIGIN_ID = "washingtonFieldsCommercial";
@@ -1055,7 +1057,7 @@ const MILEAGE_DESTINATION_IDS = ["phase3", "longValleyTrails", "rws", "alaia", "
 const CALLOUT_STORAGE_KEY = "gwrExhibitCallouts";
 const FURNITURE_STORAGE_KEY = "gwrExhibitFurniture";
 const PHASE_INSET_STORAGE_KEY = "gwrPhaseInsetFrames";
-const PHASE_INSET_ARROW_STORAGE_KEY = "gwrPhaseInsetArrows";
+const PHASE_INSET_ARROW_STORAGE_KEY = "gwrPhaseInsetArrowsV2";
 const IS_PRINT_VIEW = new URLSearchParams(window.location.search).get("print") === "1";
 
 const LAND_USE_COLORS = {
@@ -1736,9 +1738,16 @@ function enableFrameRotate(element, handle, id) {
   });
 }
 
+function resetPhaseInsetArrows() {
+  localStorage.removeItem("gwrPhaseInsetArrows");
+  localStorage.removeItem("gwrPhaseInsetArrowsV2");
+  window.location.reload();
+}
+
 function resetFrameAdjustments() {
   localStorage.removeItem("gwrFrameAdjustments");
   localStorage.removeItem("gwrPhaseInsetArrows");
+  localStorage.removeItem("gwrPhaseInsetArrowsV2");
   window.location.reload();
 }
 
@@ -2000,16 +2009,34 @@ function getInsetAnchorPoint(inset, targetPoint) {
 
 function getPhaseInsetArrowPageTarget(id, inset) {
   const saved = getSavedPositions(PHASE_INSET_ARROW_STORAGE_KEY, id);
-  if (saved?.page && Number.isFinite(saved.page.x) && Number.isFinite(saved.page.y)) {
+
+  if (
+    saved?.page &&
+    Number.isFinite(saved.page.x) &&
+    Number.isFinite(saved.page.y) &&
+    saved.page.x > 20 &&
+    saved.page.y > 20
+  ) {
     return saved.page;
   }
 
-  const defaults = PHASE_INSET_ARROW_DEFAULT_TARGETS[id] || { offsetX: 34, offsetY: 34 };
+  const defaults = PHASE_INSET_ARROW_DEFAULT_TARGETS[id];
+  if (defaults && Number.isFinite(defaults.x) && Number.isFinite(defaults.y)) {
+    return defaults;
+  }
 
-  return {
-    x: inset.offsetLeft + inset.offsetWidth + defaults.offsetX,
-    y: inset.offsetTop + inset.offsetHeight / 2 + defaults.offsetY
-  };
+  const printPage = document.querySelector(".print-page");
+  if (printPage && inset) {
+    const pageRect = printPage.getBoundingClientRect();
+    const insetRect = inset.getBoundingClientRect();
+
+    return {
+      x: insetRect.right - pageRect.left + 28,
+      y: insetRect.top - pageRect.top + insetRect.height / 2
+    };
+  }
+
+  return { x: 300, y: 300 };
 }
 
 function savePhaseInsetArrowPageTarget(id, pagePoint) {
@@ -2052,32 +2079,44 @@ function initPhaseInsetLeaders() {
 
   ensurePhaseInsetArrowMarker(svg);
 
-  PHASE_INSET_CONFIGS.forEach(config => {
-    const inset = document.querySelector(`.phase-inset[data-phase-inset-id="${config.id}"]`);
-    if (!inset || phaseInsetLeaders[config.id]) return;
+  const createLeaders = () => {
+    PHASE_INSET_CONFIGS.forEach(config => {
+      const inset = document.querySelector(`.phase-inset[data-phase-inset-id="${config.id}"]`);
+      if (!inset || phaseInsetLeaders[config.id]) return;
 
-    const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
-    line.classList.add("phase-inset-leader-line");
-    line.setAttribute("marker-end", "url(#phaseInsetArrowHead)");
-    svg.appendChild(line);
+      // If layout has not finished, wait instead of creating a handle at 0,0.
+      if (inset.offsetWidth < 20 || inset.offsetHeight < 20) return;
 
-    const pageTarget = getPhaseInsetArrowPageTarget(config.id, inset);
-    const handle = document.createElement("div");
-    handle.className = "phase-inset-arrow-handle";
-    handle.title = "Drag to move the inset arrow tip";
-    handle.style.left = `${pageTarget.x - 7}px`;
-    handle.style.top = `${pageTarget.y - 7}px`;
-    printPage.appendChild(handle);
+      const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      line.classList.add("phase-inset-leader-line");
+      line.setAttribute("marker-end", "url(#phaseInsetArrowHead)");
+      svg.appendChild(line);
 
-    enablePhaseInsetArrowHandleDrag(config.id, handle);
+      const pageTarget = getPhaseInsetArrowPageTarget(config.id, inset);
+      const handle = document.createElement("div");
+      handle.className = "phase-inset-arrow-handle";
+      handle.dataset.phaseInsetArrowId = config.id;
+      handle.title = "Drag to move the inset arrow tip";
+      handle.style.left = `${pageTarget.x - 7}px`;
+      handle.style.top = `${pageTarget.y - 7}px`;
+      printPage.appendChild(handle);
 
-    phaseInsetLeaders[config.id] = { inset, line, handle };
-    updatePhaseInsetLeader(config.id);
+      enablePhaseInsetArrowHandleDrag(config.id, handle);
+
+      phaseInsetLeaders[config.id] = { inset, line, handle };
+      updatePhaseInsetLeader(config.id);
+    });
+
+    updateAllPhaseInsetLeaders();
+  };
+
+  requestAnimationFrame(() => {
+    createLeaders();
+    window.setTimeout(createLeaders, 150);
+    window.setTimeout(createLeaders, 600);
   });
 
   window.addEventListener("resize", updateAllPhaseInsetLeaders);
-  window.setTimeout(updateAllPhaseInsetLeaders, 100);
-  window.setTimeout(updateAllPhaseInsetLeaders, 500);
 }
 
 function enablePhaseInsetArrowHandleDrag(id, handle) {
