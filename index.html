@@ -27,6 +27,8 @@
       padding: 5px 7px;
       pointer-events: none;
       text-align: center;
+      transform: translate(-50%, -50%) scale(var(--label-scale, 1));
+      transform-origin: center;
       white-space: normal;
       z-index: 10000;
     }
@@ -53,6 +55,46 @@
       user-select: none;
     }
 
+    .resize-handle {
+      background: #ffffff;
+      border: 1px solid #1f2933;
+      border-radius: 50%;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+      height: 9px;
+      opacity: 0;
+      position: absolute;
+      transition: opacity 0.12s ease;
+      width: 9px;
+    }
+
+    .map-label.adjustable:hover .resize-handle {
+      opacity: 1;
+    }
+
+    .resize-handle.nw {
+      cursor: nwse-resize;
+      left: -5px;
+      top: -5px;
+    }
+
+    .resize-handle.ne {
+      cursor: nesw-resize;
+      right: -5px;
+      top: -5px;
+    }
+
+    .resize-handle.sw {
+      bottom: -5px;
+      cursor: nesw-resize;
+      left: -5px;
+    }
+
+    .resize-handle.se {
+      bottom: -5px;
+      cursor: nwse-resize;
+      right: -5px;
+    }
+
     .map-label.measurement {
       background: rgba(255, 249, 196, 0.9);
       border-color: rgba(111, 78, 0, 0.6);
@@ -77,7 +119,6 @@
       max-width: 180px;
       min-width: 90px;
       text-align: left;
-      transform: translate(-50%, -50%);
     }
 
     .map-label.scale-bar {
@@ -111,6 +152,11 @@
       gap: 6px;
       padding: 4px 7px 5px;
       transform: rotate(-1.25deg);
+      transform-origin: center;
+    }
+
+    .legend-control {
+      transform: translate(-50%, -50%) rotate(-1.25deg) scale(var(--label-scale, 1));
       transform-origin: center;
     }
 
@@ -549,12 +595,14 @@ function normalizePoint(position) {
 function addHtmlMapLabel(position, html, className = "", options = {}) {
   const overlay = new google.maps.OverlayView();
   let labelPosition = normalizePoint(position);
+  let labelScale = options.scale || 1;
   let div;
 
   overlay.onAdd = function() {
     div = document.createElement("div");
     div.className = `map-label ${className} ${options.draggable ? "adjustable" : ""}`.trim();
     div.innerHTML = html;
+    div.style.setProperty("--label-scale", labelScale);
     div.title = options.draggable ? "Drag to move this label" : "";
 
     if (options.draggable) {
@@ -563,6 +611,14 @@ function addHtmlMapLabel(position, html, className = "", options = {}) {
         overlay.draw();
         if (options.onPositionChanged) options.onPositionChanged(position);
       });
+    }
+
+    if (options.resizable) {
+      addResizeHandles(div, scale => {
+        labelScale = scale;
+        div.style.setProperty("--label-scale", labelScale);
+        if (options.onScaleChanged) options.onScaleChanged(labelScale);
+      }, labelScale);
     }
 
     this.getPanes().floatPane.appendChild(div);
@@ -583,6 +639,44 @@ function addHtmlMapLabel(position, html, className = "", options = {}) {
 
   overlay.setMap(map);
   return overlay;
+}
+
+function addResizeHandles(element, onResize, initialScale) {
+  ["nw", "ne", "sw", "se"].forEach(corner => {
+    const handle = document.createElement("span");
+    handle.className = `resize-handle ${corner}`;
+    element.appendChild(handle);
+
+    handle.addEventListener("mousedown", event => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const startMouse = { x: event.clientX, y: event.clientY };
+      const startScale = initialScale;
+
+      map.setOptions({ draggable: false });
+
+      const move = moveEvent => {
+        const dragDistance = Math.hypot(moveEvent.clientX - startMouse.x, moveEvent.clientY - startMouse.y);
+        const direction = corner === "nw" || corner === "sw"
+          ? Math.sign(startMouse.x - moveEvent.clientX)
+          : Math.sign(moveEvent.clientX - startMouse.x);
+        const nextScale = Math.max(0.45, Math.min(2.5, startScale + direction * dragDistance / 180));
+
+        onResize(Number(nextScale.toFixed(3)));
+      };
+
+      const up = () => {
+        initialScale = parseFloat(element.style.getPropertyValue("--label-scale")) || initialScale;
+        map.setOptions({ draggable: true });
+        document.removeEventListener("mousemove", move);
+        document.removeEventListener("mouseup", up);
+      };
+
+      document.addEventListener("mousemove", move);
+      document.addEventListener("mouseup", up);
+    });
+  });
 }
 
 function enableLabelDragging(overlay, element, onMove) {
@@ -648,18 +742,33 @@ function getSavedCalloutPositions(id) {
 }
 
 function saveCalloutPositions(id, labelPosition, targetPosition) {
+  const savedPositions = getSavedCalloutPositions(id) || {};
+
   savePositions(CALLOUT_STORAGE_KEY, id, {
     label: labelPosition,
-    target: targetPosition
+    target: targetPosition,
+    scale: savedPositions.scale || 1
+  });
+}
+
+function saveCalloutScale(id, scale) {
+  const savedPositions = getSavedCalloutPositions(id) || {};
+
+  savePositions(CALLOUT_STORAGE_KEY, id, {
+    label: savedPositions.label,
+    target: savedPositions.target,
+    scale: scale
   });
 }
 
 function addCallout(labelPosition, targetPosition, html, className = "callout", id = null) {
   const savedPositions = getSavedCalloutPositions(id);
+  let labelScale = 1;
 
   if (savedPositions) {
     labelPosition = savedPositions.label || labelPosition;
     targetPosition = savedPositions.target || targetPosition;
+    labelScale = savedPositions.scale || labelScale;
   }
 
   let labelPoint = normalizePoint(labelPosition);
@@ -710,22 +819,42 @@ function addCallout(labelPosition, targetPosition, html, className = "callout", 
 
   return addHtmlMapLabel(labelPoint, html, className, {
     draggable: true,
+    resizable: true,
+    scale: labelScale,
     onPositionChanged: position => {
       labelPoint = normalizePoint(position);
       leader.setPath([labelPoint, targetPoint]);
       saveCalloutPositions(id, labelPoint, targetPoint);
+    },
+    onScaleChanged: scale => {
+      saveCalloutScale(id, scale);
     }
   });
 }
 
 function addAdjustableMapFurniture(id, position, html, className) {
-  const savedPosition = getSavedPositions(FURNITURE_STORAGE_KEY, id);
-  const startPosition = savedPosition || position;
+  const saved = getSavedPositions(FURNITURE_STORAGE_KEY, id);
+  const startPosition = saved?.position || saved || position;
+  const startScale = saved?.scale || 1;
+
+  const saveFurniture = (nextPosition = startPosition, nextScale = startScale) => {
+    savePositions(FURNITURE_STORAGE_KEY, id, {
+      position: normalizePoint(nextPosition),
+      scale: nextScale
+    });
+  };
 
   return addHtmlMapLabel(startPosition, html, className, {
     draggable: true,
+    resizable: true,
+    scale: startScale,
     onPositionChanged: newPosition => {
-      savePositions(FURNITURE_STORAGE_KEY, id, normalizePoint(newPosition));
+      const savedNow = getSavedPositions(FURNITURE_STORAGE_KEY, id);
+      saveFurniture(newPosition, savedNow?.scale || startScale);
+    },
+    onScaleChanged: scale => {
+      const savedNow = getSavedPositions(FURNITURE_STORAGE_KEY, id);
+      saveFurniture(savedNow?.position || startPosition, scale);
     }
   });
 }
@@ -766,7 +895,7 @@ function addExhibitControls() {
     <div class="legend-row"><span class="legend-swatch" style="background:#D3FFBE"></span>Very Low Density</div>
     <div class="legend-row"><span class="legend-swatch" style="background:#00734C"></span>Park</div>
     <div class="legend-row"><span class="legend-swatch open-space"></span>Open Space</div>
-  `, "map-control");
+  `, "map-control legend-control");
 }
 
 function addExhibitLabels() {
