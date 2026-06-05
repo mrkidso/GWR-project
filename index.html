@@ -18,6 +18,7 @@
 <script>
 let map;
 let roadsLayer;
+let roadsInfoWindow;
 
 const LAYER_Z_INDEX = {
   default: 10,
@@ -425,6 +426,7 @@ function initMap() {
     disableDefaultUI: false,
     tilt: 0
   });
+  roadsInfoWindow = new google.maps.InfoWindow();
 
 loadLayer("city.geojson", {
   strokeColor: "#FF0000",
@@ -621,11 +623,29 @@ function loadRoadsLayer() {
       strokeOpacity: 1,
       fillColor: color,
       fillOpacity: 1,
-      zIndex: LAYER_Z_INDEX.roads
+      zIndex: LAYER_Z_INDEX.roads,
+      clickable: true
     };
   });
   roadsLayer = layer;
   layer.setMap(map);
+
+  layer.addListener("click", function(event) {
+    const objectId = event.feature.getProperty("objectid");
+    const globalId = event.feature.getProperty("globalid");
+    const surfaceType = event.feature.getProperty("surftype") || "Unknown";
+
+    roadsInfoWindow.setContent(`
+      <div style="font-family: Arial, sans-serif; font-size: 12px; line-height: 1.4;">
+        <strong>Road Feature</strong><br>
+        Object ID: ${objectId}<br>
+        Global ID: ${globalId}<br>
+        Surface: ${surfaceType}
+      </div>
+    `);
+    roadsInfoWindow.setPosition(event.latLng);
+    roadsInfoWindow.open(map);
+  });
 }
 
 function loadCommercialLayer() {
