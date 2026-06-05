@@ -428,6 +428,7 @@ function initMap() {
     tilt: 0
   });
   roadsInfoWindow = new google.maps.InfoWindow();
+  map.addListener("click", clearRoadSelection);
 
 loadLayer("city.geojson", {
   strokeColor: "#FF0000",
@@ -635,9 +636,19 @@ function loadRoadsLayer() {
   layer.setMap(map);
 
   layer.addListener("click", function(event) {
+    event.stop();
     highlightRoadFeature(event.feature);
     showRoadPopup(event.feature, event.latLng);
   });
+}
+
+function clearRoadSelection() {
+  if (selectedRoadFeature) {
+    roadsLayer.revertStyle(selectedRoadFeature);
+    selectedRoadFeature = null;
+  }
+
+  roadsInfoWindow.close();
 }
 
 function highlightRoadFeature(feature) {
