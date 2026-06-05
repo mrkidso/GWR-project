@@ -370,10 +370,29 @@
       right: 0;
     }
 
-    .frame-contact-card svg {
+    .frame-gis-info {
+      color: #111111;
+      font-family: "Times New Roman", serif;
+      font-size: 7px;
+      left: -1.14in;
+      line-height: 1.15;
+      position: absolute;
+      text-align: center;
+      top: 0.42in;
+      transform: rotate(-90deg);
+      transform-origin: center;
+      width: 2.8in;
+    }
+
+    .frame-logo-image {
+      bottom: 0.10in;
       display: block;
-      height: 100%;
-      width: 100%;
+      height: auto;
+      left: -0.43in;
+      position: absolute;
+      transform: rotate(-90deg);
+      transform-origin: center;
+      width: 1.36in;
     }
 
     @page {
@@ -406,27 +425,13 @@ if (new URLSearchParams(window.location.search).get("print") === "1") {
     <div class="frame-title">George Washington Road Corridor Exhibit</div>
     <div class="frame-panel-divider"></div>
     <div class="frame-contact-card" aria-label="Washington City GIS contact and logo">
-      <svg viewBox="0 0 48 283" role="img">
-        <g transform="translate(24 73) rotate(-90)" text-anchor="middle" fill="#111111" font-family="Times New Roman, serif">
-          <text y="-8" font-size="8">Washington City GIS</text>
-          <text y="2" font-size="7">Washington County, Utah 84780</text>
-          <text y="12" font-size="7">Washington City, UT 84780</text>
-          <text y="22" font-size="7">435-656-6300</text>
-        </g>
-
-        <g transform="translate(24 214) rotate(-90)">
-          <g transform="translate(-54 -17)">
-            <g transform="translate(0 2)" stroke="#111111" fill="none" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="15" cy="15" r="11" stroke-width="2.2"></circle>
-              <path d="M6 18 C9 12 12 8 15 5 C16 11 19 16 24 20 C19 18 14 18 10 22" stroke-width="2.2"></path>
-              <path d="M8 25 C16 20 24 20 31 24" stroke-width="2.2"></path>
-            </g>
-            <text x="32" y="16" fill="#111111" font-family="Times New Roman, serif" font-size="22" font-weight="700">Washington</text>
-            <text x="32" y="36" fill="#111111" font-family="Times New Roman, serif" font-size="22" font-weight="700">City</text>
-            <text x="93" y="39" fill="#111111" font-family="Arial, sans-serif" font-size="5.6">Community &amp; Beauty</text>
-          </g>
-        </g>
-      </svg>
+      <div class="frame-gis-info">
+        Washington City GIS<br>
+        Washington County, Utah 84780<br>
+        Washington City, UT 84780<br>
+        (435) 656-6300
+      </div>
+      <img src="washington-city-logo.png" alt="Washington City Logo" class="frame-logo-image">
     </div>
   </div>
 </div>
