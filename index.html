@@ -395,6 +395,62 @@
       width: 1.36in;
     }
 
+    .frame-title-panel .frame-adjustable {
+      cursor: move;
+      pointer-events: auto;
+      user-select: none;
+      --frame-rotate: -90deg;
+      --frame-scale: 1;
+      transform: rotate(var(--frame-rotate)) scale(var(--frame-scale));
+      transform-origin: center;
+    }
+
+    .frame-adjustable:hover {
+      outline: 1px dashed rgba(0, 120, 255, 0.85);
+      outline-offset: 2px;
+    }
+
+    .frame-adjustable .frame-resize-handle,
+    .frame-adjustable .frame-rotate-handle {
+      background: #ffffff;
+      border: 1px solid #111111;
+      border-radius: 50%;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+      height: 8px;
+      opacity: 0;
+      position: absolute;
+      transition: opacity 0.12s ease;
+      width: 8px;
+      z-index: 10;
+    }
+
+    .frame-adjustable:hover .frame-resize-handle,
+    .frame-adjustable:hover .frame-rotate-handle {
+      opacity: 1;
+    }
+
+    .frame-resize-handle {
+      bottom: -9px;
+      cursor: nwse-resize;
+      right: -9px;
+    }
+
+    .frame-rotate-handle {
+      cursor: grab;
+      left: 50%;
+      top: -17px;
+      transform: translateX(-50%);
+    }
+
+    .frame-rotate-handle::after {
+      border-left: 1px solid #111111;
+      content: "";
+      height: 8px;
+      left: 50%;
+      position: absolute;
+      top: 8px;
+    }
+
     @page {
       margin: 0;
       size: 17in 11in;
@@ -421,17 +477,17 @@ if (new URLSearchParams(window.location.search).get("print") === "1") {
 <div class="print-page" aria-hidden="true">
   <div class="frame-border"></div>
   <div class="frame-title-panel">
-    <div class="frame-date" id="frameDate"></div>
-    <div class="frame-title">George Washington Road Corridor Exhibit</div>
+    <div class="frame-date frame-adjustable" id="frameDate" data-frame-id="frameDate" data-default-rotate="-90"></div>
+    <div class="frame-title frame-adjustable" data-frame-id="frameTitle" data-default-rotate="-90">George Washington Road Corridor Exhibit</div>
     <div class="frame-panel-divider"></div>
     <div class="frame-contact-card" aria-label="Washington City GIS contact and logo">
-      <div class="frame-gis-info">
+      <div class="frame-gis-info frame-adjustable" data-frame-id="frameGisInfo" data-default-rotate="-90">
         Washington City GIS<br>
         Washington County, Utah 84780<br>
         Washington City, UT 84780<br>
         (435) 656-6300
       </div>
-      <img src="washington-city-logo.png" alt="Washington City Logo" class="frame-logo-image">
+      <img src="washington-city-logo.png" alt="Washington City Logo" class="frame-logo-image frame-adjustable" data-frame-id="frameLogo" data-default-rotate="-90">
     </div>
   </div>
 </div>
@@ -799,6 +855,168 @@ function setPrintFrameDate() {
 
   dateElement.innerHTML = `Map Created:<br>${currentDate}`;
 }
+
+
+function initFrameAdjustables() {
+  const panel = document.querySelector(".frame-title-panel");
+  if (!panel) return;
+
+  document.querySelectorAll(".frame-title-panel .frame-adjustable").forEach(element => {
+    const id = element.dataset.frameId;
+    if (!id) return;
+
+    const saved = getFrameAdjustment(id);
+    const defaultRotate = Number(element.dataset.defaultRotate || -90);
+
+    element.style.setProperty("--frame-rotate", `${saved?.rotate ?? defaultRotate}deg`);
+    element.style.setProperty("--frame-scale", saved?.scale ?? 1);
+
+    // Convert bottom-positioned elements, such as the logo image, into top/left
+    // positioning so dragging is predictable.
+    const startLeft = saved?.left ?? element.offsetLeft;
+    const startTop = saved?.top ?? element.offsetTop;
+
+    element.style.left = `${startLeft}px`;
+    element.style.top = `${startTop}px`;
+    element.style.right = "auto";
+    element.style.bottom = "auto";
+
+    addFrameElementHandles(element, id);
+  });
+}
+
+function getFrameAdjustment(id) {
+  try {
+    const saved = JSON.parse(localStorage.getItem("gwrFrameAdjustments") || "{}");
+    return saved[id] || null;
+  }
+  catch {
+    return null;
+  }
+}
+
+function saveFrameAdjustment(id, element) {
+  try {
+    const saved = JSON.parse(localStorage.getItem("gwrFrameAdjustments") || "{}");
+    saved[id] = {
+      left: parseFloat(element.style.left || element.offsetLeft || 0),
+      top: parseFloat(element.style.top || element.offsetTop || 0),
+      scale: Number(element.style.getPropertyValue("--frame-scale") || 1),
+      rotate: parseFloat((element.style.getPropertyValue("--frame-rotate") || "-90deg").replace("deg", ""))
+    };
+    localStorage.setItem("gwrFrameAdjustments", JSON.stringify(saved));
+  }
+  catch {
+    // If localStorage is blocked, the frame element will still move during the current session.
+  }
+}
+
+function addFrameElementHandles(element, id) {
+  if (!element.querySelector(".frame-resize-handle")) {
+    const resizeHandle = document.createElement("span");
+    resizeHandle.className = "frame-resize-handle";
+    element.appendChild(resizeHandle);
+    enableFrameResize(element, resizeHandle, id);
+  }
+
+  if (!element.querySelector(".frame-rotate-handle")) {
+    const rotateHandle = document.createElement("span");
+    rotateHandle.className = "frame-rotate-handle";
+    element.appendChild(rotateHandle);
+    enableFrameRotate(element, rotateHandle, id);
+  }
+
+  enableFrameDrag(element, id);
+}
+
+function enableFrameDrag(element, id) {
+  element.addEventListener("mousedown", event => {
+    if (event.target.classList.contains("frame-resize-handle") || event.target.classList.contains("frame-rotate-handle")) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const startMouse = { x: event.clientX, y: event.clientY };
+    const startLeft = parseFloat(element.style.left || element.offsetLeft || 0);
+    const startTop = parseFloat(element.style.top || element.offsetTop || 0);
+
+    const move = moveEvent => {
+      element.style.left = `${startLeft + moveEvent.clientX - startMouse.x}px`;
+      element.style.top = `${startTop + moveEvent.clientY - startMouse.y}px`;
+    };
+
+    const up = () => {
+      saveFrameAdjustment(id, element);
+      document.removeEventListener("mousemove", move);
+      document.removeEventListener("mouseup", up);
+    };
+
+    document.addEventListener("mousemove", move);
+    document.addEventListener("mouseup", up);
+  });
+}
+
+function enableFrameResize(element, handle, id) {
+  handle.addEventListener("mousedown", event => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const startMouse = { x: event.clientX, y: event.clientY };
+    const startScale = Number(element.style.getPropertyValue("--frame-scale") || 1);
+
+    const move = moveEvent => {
+      const distance = Math.hypot(moveEvent.clientX - startMouse.x, moveEvent.clientY - startMouse.y);
+      const direction = Math.sign((moveEvent.clientX - startMouse.x) + (moveEvent.clientY - startMouse.y)) || 1;
+      const nextScale = Math.max(0.15, Math.min(4, startScale + direction * distance / 160));
+
+      element.style.setProperty("--frame-scale", Number(nextScale.toFixed(3)));
+    };
+
+    const up = () => {
+      saveFrameAdjustment(id, element);
+      document.removeEventListener("mousemove", move);
+      document.removeEventListener("mouseup", up);
+    };
+
+    document.addEventListener("mousemove", move);
+    document.addEventListener("mouseup", up);
+  });
+}
+
+function enableFrameRotate(element, handle, id) {
+  handle.addEventListener("mousedown", event => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const rect = element.getBoundingClientRect();
+    const center = {
+      x: rect.left + rect.width / 2,
+      y: rect.top + rect.height / 2
+    };
+
+    const move = moveEvent => {
+      const radians = Math.atan2(moveEvent.clientY - center.y, moveEvent.clientX - center.x);
+      const degrees = Math.round(radians * 180 / Math.PI + 90);
+
+      element.style.setProperty("--frame-rotate", `${degrees}deg`);
+    };
+
+    const up = () => {
+      saveFrameAdjustment(id, element);
+      document.removeEventListener("mousemove", move);
+      document.removeEventListener("mouseup", up);
+    };
+
+    document.addEventListener("mousemove", move);
+    document.addEventListener("mouseup", up);
+  });
+}
+
+function resetFrameAdjustments() {
+  localStorage.removeItem("gwrFrameAdjustments");
+  window.location.reload();
+}
+
 
 function normalizePoint(position) {
   if (typeof position.lat === "function") {
@@ -1368,6 +1586,7 @@ function initMap() {
 
   if (IS_PRINT_VIEW) {
     setPrintFrameDate();
+    initFrameAdjustables();
   }
 
   roadsInfoWindow = new google.maps.InfoWindow();
