@@ -1526,7 +1526,16 @@ async function downloadPrintMap() {
       width: pageWidthPx,
       height: pageHeightPx,
       windowWidth: pageWidthPx,
-      windowHeight: pageHeightPx
+      windowHeight: pageHeightPx,
+      ignoreElements: element => {
+        return element.classList?.contains("export-download-panel") ||
+          element.classList?.contains("export-frame-button") ||
+          element.classList?.contains("resize-handle") ||
+          element.classList?.contains("frame-resize-handle") ||
+          element.classList?.contains("frame-rotate-handle") ||
+          element.classList?.contains("phase-inset-resize-handle") ||
+          element.classList?.contains("phase-inset-arrow-handle");
+      }
     });
 
     if (format === "pdf") {
@@ -1561,7 +1570,6 @@ async function downloadPrintMap() {
     alert("The export failed. If the satellite imagery blocked image capture, use the Browser Print / Save PDF button instead.");
   }
   finally {
-    document.body.classList.remove("is-exporting");
     window.setTimeout(() => setExportDownloadStatus(""), 3500);
   }
 }
