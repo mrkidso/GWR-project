@@ -1443,15 +1443,79 @@ function addExhibitControls() {
 }
 
 function addExhibitLabels() {
-  addCallout({ lng: -113.5685, lat: 37.0884 }, EXHIBIT_POINTS.phase3, "Phase 3<br>GWB to Crosby Way<br>Began Feb. 2026<br>Completion July 2027", "phase callout", "phase3");
-  addCallout({ lng: -113.5148, lat: 37.0894 }, EXHIBIT_POINTS.phase1, "Phase 1<br>GWB corridor", "phase", "phase1");
-  addCallout({ lng: -113.4746, lat: 37.0748 }, { lng: -113.4866, lat: 37.0833 }, "Phase 2<br>Opened June 2024", "phase", "phase2");
-  addCallout({ lng: -113.4734, lat: 37.0998 }, EXHIBIT_POINTS.longValleyTrails, "Long Valley Trails PCD<br>Connection timing:<br>approx. 9-10 months", "callout", "longValleyTrails");
-  addCallout({ lng: -113.5077, lat: 37.0577 }, EXHIBIT_POINTS.alaia, "Alaia<br>approx. 1.7 mi from<br>Washington Fields Commercial", "callout", "alaia");
-  addCallout({ lng: -113.4820, lat: 37.0468 }, EXHIBIT_POINTS.ara, "ARA Southwest Logistics Center<br>Planned: approx. 5M SF<br>Completed: approx. 350K SF<br>2025-2026 construction: approx. 900K SF", "callout", "ara");
-  addCallout({ lng: -113.4750, lat: 37.0878 }, EXHIBIT_POINTS.rws, "Regional Wheel's<br>Skate Park", "small", "rws");
-  addCallout({ lng: -113.5208, lat: 37.0450 }, EXHIBIT_POINTS.airport, "SGU Airport<br>approx. 3.5 mi from<br>Washington Fields Commercial", "callout", "airport");
-  addCallout({ lng: -113.4885, lat: 37.0882 }, { lng: -113.4990, lat: 37.0805 }, "Washington Fields<br>Commercial Area", "callout", "washingtonFieldsCommercial");
+  // Mileage notes use Washington Fields Commercial Area as the origin.
+  // These are approximate corridor/travel distances intended for the exhibit callouts.
+  addCallout(
+    { lng: -113.5685, lat: 37.0884 },
+    EXHIBIT_POINTS.phase3,
+    "Phase 3 / Crosby Way<br>Approx. 5.6 mi west of<br>Washington Fields Commercial Area<br>Began Feb. 2026<br>Completion July 2027",
+    "phase callout",
+    "phase3"
+  );
+
+  addCallout(
+    { lng: -113.5148, lat: 37.0894 },
+    EXHIBIT_POINTS.phase1,
+    "Phase 1<br>GWB corridor",
+    "phase",
+    "phase1"
+  );
+
+  addCallout(
+    { lng: -113.4746, lat: 37.0748 },
+    { lng: -113.4866, lat: 37.0833 },
+    "Phase 2<br>Opened June 2024",
+    "phase",
+    "phase2"
+  );
+
+  addCallout(
+    { lng: -113.4734, lat: 37.0998 },
+    EXHIBIT_POINTS.longValleyTrails,
+    "Long Valley Trails PCD<br>Approx. 0.8 mi from<br>Washington Fields Commercial Area<br>Connection timing:<br>approx. 9-10 months",
+    "callout",
+    "longValleyTrails"
+  );
+
+  addCallout(
+    { lng: -113.5077, lat: 37.0577 },
+    EXHIBIT_POINTS.alaia,
+    "Alaia PCD<br>Approx. 1.7 mi from<br>Washington Fields Commercial Area",
+    "callout",
+    "alaia"
+  );
+
+  addCallout(
+    { lng: -113.4820, lat: 37.0468 },
+    EXHIBIT_POINTS.ara,
+    "ARA Southwest Logistics Center<br>Approx. 2.3 mi from<br>Washington Fields Commercial Area<br>Planned: approx. 5M SF<br>Completed: approx. 350K SF<br>2025-2026 construction: approx. 900K SF",
+    "callout",
+    "ara"
+  );
+
+  addCallout(
+    { lng: -113.4750, lat: 37.0878 },
+    EXHIBIT_POINTS.rws,
+    "Regional Wheel's<br>Skate Park<br>Approx. 1.2 mi from<br>Washington Fields Commercial Area",
+    "small",
+    "rws"
+  );
+
+  addCallout(
+    { lng: -113.5208, lat: 37.0450 },
+    EXHIBIT_POINTS.airport,
+    "SGU Airport<br>Approx. 3.5 mi from<br>Washington Fields Commercial Area",
+    "callout",
+    "airport"
+  );
+
+  addCallout(
+    { lng: -113.4885, lat: 37.0882 },
+    { lng: -113.4990, lat: 37.0805 },
+    "Washington Fields<br>Commercial Area<br><em>Origin for approximate mileages</em>",
+    "callout",
+    "washingtonFieldsCommercial"
+  );
 }
 
 function getRoadPhase(objectId) {
