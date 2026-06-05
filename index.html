@@ -166,10 +166,23 @@
       margin: 3px 0;
     }
 
+    .legend-heading {
+      border-top: 1px solid rgba(31, 41, 51, 0.28);
+      font-weight: 700;
+      margin-top: 6px;
+      padding-top: 5px;
+    }
+
     .legend-swatch {
       border: 1px solid rgba(31, 41, 51, 0.4);
       height: 10px;
       width: 18px;
+    }
+
+    .legend-swatch.open-space {
+      background:
+        repeating-linear-gradient(135deg, rgba(143, 176, 123, 0.95) 0 1px, transparent 1px 4px),
+        #E8F5DD;
     }
   </style>
 </head>
@@ -745,8 +758,14 @@ function addExhibitControls() {
     <div class="legend-row"><span class="legend-swatch" style="background:#0F766E"></span>Phase 2</div>
     <div class="legend-row"><span class="legend-swatch" style="background:#F97316"></span>Phase 3</div>
     <div class="legend-row"><span class="legend-swatch" style="background:#00FFFF"></span>ARA / RWS</div>
-    <div class="legend-row"><span class="legend-swatch" style="background:#F04B4B"></span>Commercial</div>
     <div class="legend-row"><span class="legend-swatch" style="background:#F7F7D8"></span>Long Valley Trails PCD</div>
+    <div class="legend-heading">General Land Use</div>
+    <div class="legend-row"><span class="legend-swatch" style="background:#E60000"></span>Community Commercial</div>
+    <div class="legend-row"><span class="legend-swatch" style="background:#C84F4F"></span>Neighborhood Commercial</div>
+    <div class="legend-row"><span class="legend-swatch" style="background:#F7F7D8"></span>Low Density</div>
+    <div class="legend-row"><span class="legend-swatch" style="background:#D3FFBE"></span>Very Low Density</div>
+    <div class="legend-row"><span class="legend-swatch" style="background:#00734C"></span>Park</div>
+    <div class="legend-row"><span class="legend-swatch open-space"></span>Open Space</div>
   `, "map-control");
 }
 
