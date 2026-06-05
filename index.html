@@ -821,6 +821,7 @@ let roadsInfoWindow;
 let selectedRoadFeature;
 const phaseInsetMaps = {};
 const phaseInsetBounds = {};
+const phaseInsetRefreshTimers = {};
 
 const LAYER_Z_INDEX = {
   default: 10,
@@ -1456,6 +1457,7 @@ function initPhaseInsetAdjustables() {
     });
 
     enablePhaseInsetDrag(inset, id);
+    observePhaseInsetSize(inset, id);
   });
 }
 
@@ -1473,11 +1475,33 @@ function refreshPhaseInsetMap(id) {
   const bounds = phaseInsetBounds[id];
   if (!insetMap || !bounds) return;
 
-  window.setTimeout(() => {
+  window.clearTimeout(phaseInsetRefreshTimers[id]);
+  phaseInsetRefreshTimers[id] = window.setTimeout(() => {
     google.maps.event.trigger(insetMap, "resize");
     fitInsetMapToPhaseWidth(insetMap, bounds);
     updatePhaseInsetScale(id);
-  }, 0);
+  }, 80);
+}
+
+function observePhaseInsetSize(inset, id) {
+  if (!window.ResizeObserver) return;
+
+  let lastWidth = inset.offsetWidth;
+  let lastHeight = inset.offsetHeight;
+  const observer = new ResizeObserver(entries => {
+    const rect = entries[0]?.contentRect;
+    if (!rect) return;
+
+    const widthChanged = Math.abs(rect.width - lastWidth) > 1;
+    const heightChanged = Math.abs(rect.height - lastHeight) > 1;
+    if (!widthChanged && !heightChanged) return;
+
+    lastWidth = rect.width;
+    lastHeight = rect.height;
+    refreshPhaseInsetMap(id);
+  });
+
+  observer.observe(inset);
 }
 
 function enablePhaseInsetDrag(inset, id) {
