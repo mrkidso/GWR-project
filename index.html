@@ -886,7 +886,8 @@
       z-index: 50000;
     }
 
-    .export-fixed-scalebar.active {
+    .export-fixed-scalebar.active,
+    body.is-exporting .export-fixed-scalebar {
       align-items: flex-end;
       display: inline-flex;
     }
@@ -1605,7 +1606,7 @@ async function downloadPrintMap() {
       windowWidth: pageWidthPx,
       windowHeight: pageHeightPx,
       ignoreElements: element => {
-        return (element.classList?.contains("map-label") && element.classList?.contains("scale-bar")) ||
+        return (element.classList && !element.classList.contains("export-fixed-scalebar") && element.classList.contains("map-label") && element.classList.contains("scale-bar")) ||
           element.classList?.contains("export-download-panel") ||
           element.classList?.contains("export-frame-button") ||
           element.classList?.contains("resize-handle") ||
@@ -2594,24 +2595,42 @@ function updateScaleBar() {
 }
 
 function prepareFixedExportScaleBar() {
-  const sourceBar = document.querySelector(".map-label.scale-bar");
   const fixedBar = document.getElementById("exportFixedScaleBar");
   const printPage = document.querySelector(".print-page");
-  const dynamicBar = document.getElementById("dynamic-scale-bar");
-
-  if (!sourceBar || !fixedBar || !printPage || !dynamicBar) return;
+  if (!fixedBar || !printPage) return;
 
   updateScaleBar();
 
+  const sourceBar = document.querySelector(".map-label.scale-bar");
+  const dynamicBar = document.getElementById("dynamic-scale-bar");
   const pageRect = printPage.getBoundingClientRect();
-  const sourceRect = sourceBar.getBoundingClientRect();
 
-  fixedBar.style.left = `${sourceRect.left - pageRect.left}px`;
-  fixedBar.style.top = `${sourceRect.top - pageRect.top}px`;
+  let left = 700;
+  let top = 965;
 
-  const scaleWidth = dynamicBar.style.getPropertyValue("--dynamic-scale-width") || "200px";
-  fixedBar.querySelector(".export-fixed-scale-labels").style.width = scaleWidth;
-  fixedBar.querySelector(".export-fixed-scale-blocks").style.width = scaleWidth;
+  if (sourceBar) {
+    const sourceRect = sourceBar.getBoundingClientRect();
+
+    if (
+      Number.isFinite(sourceRect.left) &&
+      Number.isFinite(sourceRect.top) &&
+      sourceRect.width > 10 &&
+      sourceRect.height > 10
+    ) {
+      left = sourceRect.left - pageRect.left;
+      top = sourceRect.top - pageRect.top;
+    }
+  }
+
+  fixedBar.style.left = `${left}px`;
+  fixedBar.style.top = `${top}px`;
+
+  const scaleWidth = dynamicBar?.style?.getPropertyValue("--dynamic-scale-width") || "230px";
+  const labelRow = fixedBar.querySelector(".export-fixed-scale-labels");
+  const blockRow = fixedBar.querySelector(".export-fixed-scale-blocks");
+
+  if (labelRow) labelRow.style.width = scaleWidth;
+  if (blockRow) blockRow.style.width = scaleWidth;
 
   fixedBar.classList.add("active");
 }
