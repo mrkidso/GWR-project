@@ -19,6 +19,7 @@
 let map;
 let roadsLayer;
 let roadsInfoWindow;
+let selectedRoadFeature;
 
 const LAYER_Z_INDEX = {
   default: 10,
@@ -634,7 +635,23 @@ function loadRoadsLayer() {
   layer.setMap(map);
 
   layer.addListener("click", function(event) {
+    highlightRoadFeature(event.feature);
     showRoadPopup(event.feature, event.latLng);
+  });
+}
+
+function highlightRoadFeature(feature) {
+  if (selectedRoadFeature) {
+    roadsLayer.revertStyle(selectedRoadFeature);
+  }
+
+  selectedRoadFeature = feature;
+  roadsLayer.overrideStyle(feature, {
+    strokeColor: "#00FFFF",
+    strokeOpacity: 1,
+    strokeWeight: 6,
+    fillOpacity: 1,
+    zIndex: LAYER_Z_INDEX.roads + 10
   });
 }
 
