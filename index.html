@@ -883,8 +883,8 @@ const EXHIBIT_POINTS = {
 };
 
 const PHASE_INSET_ARROW_DEFAULT_TARGETS = {
-  phase1: { lng: -113.5230, lat: 37.0817 },
-  phase2: { lng: -113.4825, lat: 37.0795 }
+  phase1: { lng: -113.5190, lat: 37.0840 },
+  phase2: { lng: -113.4990, lat: 37.0840 }
 };
 const ROUTE_MILES = {};
 const MILEAGE_ORIGIN_ID = "washingtonFieldsCommercial";
@@ -1719,8 +1719,13 @@ function getInsetAnchorPoint(inset, targetPoint) {
 }
 
 function getPhaseInsetArrowTarget(id) {
-  const saved = getSavedPositions(PHASE_INSET_ARROW_STORAGE_KEY, id);
-  return saved?.target || PHASE_INSET_ARROW_DEFAULT_TARGETS[id] || EXHIBIT_POINTS[id] || null;
+
+  // Ignore previously saved positions and always start
+  // from the nearby default locations.
+
+  return PHASE_INSET_ARROW_DEFAULT_TARGETS[id]
+    || EXHIBIT_POINTS[id]
+    || null;
 }
 
 function savePhaseInsetArrowTarget(id, target) {
