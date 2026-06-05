@@ -572,7 +572,7 @@
     }
 
     .phase-inset-map {
-      bottom: 0;
+      bottom: 0.30in;
       left: 0;
       pointer-events: none;
       position: absolute;
@@ -671,6 +671,67 @@
       right: -6px;
     }
 
+    .phase-inset-scale {
+      align-items: flex-end;
+      background: rgba(255, 255, 255, 0.94);
+      border-top: 1px solid rgba(17, 24, 39, 0.35);
+      bottom: 0;
+      box-sizing: border-box;
+      color: #111827;
+      display: flex;
+      gap: 5px;
+      height: 0.30in;
+      justify-content: center;
+      left: 0;
+      padding: 3px 6px 4px;
+      pointer-events: none;
+      position: absolute;
+      right: 0;
+      z-index: 2;
+    }
+
+    .phase-inset-scale-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+
+    .phase-inset-scale-labels {
+      display: flex;
+      font-size: 7px;
+      font-weight: 700;
+      justify-content: space-between;
+      line-height: 1;
+      width: var(--phase-inset-scale-width, 90px);
+    }
+
+    .phase-inset-scale-bar {
+      border: 1px solid #111827;
+      box-sizing: border-box;
+      display: flex;
+      height: 8px;
+      width: var(--phase-inset-scale-width, 90px);
+    }
+
+    .phase-inset-scale-bar span {
+      flex: 1;
+    }
+
+    .phase-inset-scale-bar span:nth-child(odd) {
+      background: #111827;
+    }
+
+    .phase-inset-scale-bar span:nth-child(even) {
+      background: #ffffff;
+    }
+
+    .phase-inset-scale-units {
+      font-size: 8px;
+      font-weight: 700;
+      line-height: 1;
+      padding-bottom: 1px;
+    }
+
     @page {
       margin: 0;
       size: 17in 11in;
@@ -718,6 +779,18 @@ if (new URLSearchParams(window.location.search).get("print") === "1") {
       <span class="phase-inset-note">GWB corridor</span>
     </div>
     <div id="phase1InsetMap" class="phase-inset-map"></div>
+    <div class="phase-inset-scale" data-phase-scale-for="phase1">
+      <div class="phase-inset-scale-stack">
+        <div class="phase-inset-scale-labels">
+          <span>0</span>
+          <span class="phase-inset-scale-distance">--</span>
+        </div>
+        <div class="phase-inset-scale-bar">
+          <span></span><span></span><span></span><span></span>
+        </div>
+      </div>
+      <div class="phase-inset-scale-units">ft</div>
+    </div>
   </div>
   <div class="phase-inset phase-two" data-phase-inset-id="phase2">
     <div class="phase-inset-title">
@@ -725,6 +798,18 @@ if (new URLSearchParams(window.location.search).get("print") === "1") {
       <span class="phase-inset-note">Opened June 2024</span>
     </div>
     <div id="phase2InsetMap" class="phase-inset-map"></div>
+    <div class="phase-inset-scale" data-phase-scale-for="phase2">
+      <div class="phase-inset-scale-stack">
+        <div class="phase-inset-scale-labels">
+          <span>0</span>
+          <span class="phase-inset-scale-distance">--</span>
+        </div>
+        <div class="phase-inset-scale-bar">
+          <span></span><span></span><span></span><span></span>
+        </div>
+      </div>
+      <div class="phase-inset-scale-units">ft</div>
+    </div>
   </div>
 </div>
 <div id="map"></div>
@@ -1390,7 +1475,8 @@ function refreshPhaseInsetMap(id) {
 
   window.setTimeout(() => {
     google.maps.event.trigger(insetMap, "resize");
-    fitMapToDataBounds(insetMap, bounds);
+    fitInsetMapToPhaseWidth(insetMap, bounds);
+    updatePhaseInsetScale(id);
   }, 0);
 }
 
@@ -1818,6 +1904,39 @@ function updateScaleBar() {
   if (distanceLabel) distanceLabel.textContent = "1";
 }
 
+function getNiceFeetDistance(maxFeet) {
+  if (!Number.isFinite(maxFeet) || maxFeet <= 0) return 100;
+
+  const candidates = [25, 50, 100, 200, 250, 500, 1000, 1320, 2640, 5280];
+  return candidates.reduce((best, candidate) => candidate <= maxFeet ? candidate : best, candidates[0]);
+}
+
+function updatePhaseInsetScale(id) {
+  const insetMap = phaseInsetMaps[id];
+  const scale = document.querySelector(`.phase-inset-scale[data-phase-scale-for="${id}"]`);
+  if (!insetMap || !scale) return;
+
+  const center = insetMap.getCenter();
+  const zoom = insetMap.getZoom();
+  if (!center || typeof zoom !== "number") return;
+
+  const latitude = center.lat();
+  const metersPerPixel = 156543.03392 * Math.cos(latitude * Math.PI / 180) / Math.pow(2, zoom);
+  const maxScalePixels = Math.max(70, scale.clientWidth * 0.46);
+  const maxFeet = maxScalePixels * metersPerPixel * 3.28084;
+  const scaleFeet = getNiceFeetDistance(maxFeet);
+  const scaleWidthPixels = scaleFeet / 3.28084 / metersPerPixel;
+  const useMiles = scaleFeet >= 5280;
+  const labelValue = useMiles ? Number((scaleFeet / 5280).toFixed(2)) : scaleFeet;
+
+  scale.style.setProperty("--phase-inset-scale-width", `${scaleWidthPixels}px`);
+
+  const distanceLabel = scale.querySelector(".phase-inset-scale-distance");
+  const unitsLabel = scale.querySelector(".phase-inset-scale-units");
+  if (distanceLabel) distanceLabel.textContent = `${labelValue}`;
+  if (unitsLabel) unitsLabel.textContent = useMiles ? "mi" : "ft";
+}
+
 function initDynamicScaleBarUpdates() {
   if (!map) return;
 
@@ -2117,6 +2236,42 @@ function fitMapToDataBounds(targetMap, bounds) {
   targetMap.fitBounds(googleBounds, 8);
 }
 
+function fitInsetMapToPhaseWidth(targetMap, bounds) {
+  const mapDiv = targetMap.getDiv();
+  const width = mapDiv.clientWidth;
+  const height = mapDiv.clientHeight;
+  if (!width || !height) {
+    fitMapToDataBounds(targetMap, bounds);
+    return;
+  }
+
+  const horizontalPaddingFactor = 0.08;
+  const westX = lngToWorldX(bounds.minLng);
+  const eastX = lngToWorldX(bounds.maxLng);
+  const northY = latToWorldY(bounds.maxLat);
+  const southY = latToWorldY(bounds.minLat);
+  const phaseWorldWidth = Math.max(eastX - westX, 0.000001);
+  const phaseWorldHeight = Math.max(southY - northY, 0.000001);
+  const targetWorldWidth = phaseWorldWidth * (1 + horizontalPaddingFactor * 2);
+  let targetWorldHeight = targetWorldWidth * height / width;
+
+  if (targetWorldHeight < phaseWorldHeight * 1.12) {
+    targetWorldHeight = phaseWorldHeight * 1.12;
+  }
+
+  const centerX = (westX + eastX) / 2;
+  const centerY = (northY + southY) / 2;
+  const zoomX = Math.log2(width / (targetWorldWidth * 256));
+  const zoomY = Math.log2(height / (targetWorldHeight * 256));
+  const zoom = Math.min(zoomX, zoomY);
+
+  targetMap.setCenter({
+    lng: centerX * 360 - 180,
+    lat: worldYToLat(centerY)
+  });
+  targetMap.setZoom(zoom);
+}
+
 function addInsetRoadLayer(targetMap, roadsData, activeRoadIds) {
   const layer = new google.maps.Data({ map: targetMap });
   layer.addGeoJson(roadsData);
@@ -2190,13 +2345,17 @@ function createPhaseInsetMap(config, roadsData, cityData) {
   if (phaseFeatures.length > 0) {
     const phaseBounds = getFeaturesBounds(phaseFeatures);
     phaseInsetBounds[config.id] = phaseBounds;
-    fitMapToDataBounds(insetMap, phaseBounds);
+    fitInsetMapToPhaseWidth(insetMap, phaseBounds);
     addRoadWidthMeasurementsToMap(insetMap, phaseFeatures, config.roadIds);
 
     google.maps.event.addListenerOnce(insetMap, "idle", () => {
       google.maps.event.trigger(insetMap, "resize");
-      fitMapToDataBounds(insetMap, phaseBounds);
+      fitInsetMapToPhaseWidth(insetMap, phaseBounds);
+      updatePhaseInsetScale(config.id);
     });
+
+    insetMap.addListener("idle", () => updatePhaseInsetScale(config.id));
+    window.setTimeout(() => updatePhaseInsetScale(config.id), 400);
   }
 }
 
