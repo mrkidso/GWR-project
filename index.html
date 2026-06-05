@@ -624,10 +624,25 @@
     }
 
     .inset-map-label.measurement {
-      background: rgba(255, 249, 196, 0.95);
-      border-color: rgba(111, 78, 0, 0.72);
-      font-size: 7px;
-      padding: 1px 3px;
+      background: rgba(255, 249, 196, 0.97);
+      border-color: rgba(111, 78, 0, 0.78);
+      font-size: 14px;
+      font-weight: 800;
+      line-height: 1.05;
+      padding: 3px 6px;
+      text-shadow:
+        -1px -1px 0 rgba(255,255,255,0.95),
+         1px -1px 0 rgba(255,255,255,0.95),
+        -1px  1px 0 rgba(255,255,255,0.95),
+         1px  1px 0 rgba(255,255,255,0.95);
+    }
+
+    .phase-inset.phase-one .inset-map-label.measurement {
+      transform: translate(-50%, calc(-50% + 18px));
+    }
+
+    .phase-inset.phase-two .inset-map-label.measurement {
+      transform: translate(-50%, calc(-50% + 14px));
     }
 
     .phase-inset-resize-handle {
