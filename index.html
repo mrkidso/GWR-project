@@ -771,6 +771,106 @@
       display: block;
     }
 
+
+    .export-download-panel {
+      background: rgba(255, 255, 255, 0.97);
+      border: 1px solid rgba(31, 41, 51, 0.35);
+      border-radius: 6px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.28);
+      box-sizing: border-box;
+      color: #1f2933;
+      display: none;
+      font-family: Arial, sans-serif;
+      left: 12px;
+      padding: 10px;
+      position: fixed;
+      top: 12px;
+      width: 230px;
+      z-index: 60000;
+    }
+
+    body.print-view .export-download-panel {
+      display: block;
+    }
+
+    .export-download-title {
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .export-download-panel label {
+      display: block;
+      font-size: 11px;
+      font-weight: 700;
+      margin: 7px 0 3px;
+    }
+
+    .export-download-panel select,
+    .export-download-panel button {
+      box-sizing: border-box;
+      font-family: Arial, sans-serif;
+      font-size: 12px;
+      padding: 6px;
+      width: 100%;
+    }
+
+    .export-download-panel button {
+      background: #2563eb;
+      border: 0;
+      border-radius: 4px;
+      color: #ffffff;
+      cursor: pointer;
+      font-weight: 700;
+      margin-top: 8px;
+    }
+
+    .export-download-panel button:hover {
+      background: #1d4ed8;
+    }
+
+    .export-download-panel button.secondary {
+      background: #4b5563;
+    }
+
+    .export-download-panel button.secondary:hover {
+      background: #374151;
+    }
+
+    .export-download-note {
+      color: #4b5563;
+      font-size: 10px;
+      line-height: 1.25;
+      margin-top: 7px;
+    }
+
+    .export-download-status {
+      color: #111827;
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1.25;
+      margin-top: 7px;
+      min-height: 14px;
+    }
+
+    body.is-exporting {
+      background: #ffffff !important;
+      overflow: hidden !important;
+    }
+
+    body.is-exporting .export-download-panel,
+    body.is-exporting .export-frame-button,
+    body.is-exporting .resize-handle,
+    body.is-exporting .frame-resize-handle,
+    body.is-exporting .frame-rotate-handle,
+    body.is-exporting .phase-inset-resize-handle,
+    body.is-exporting .phase-inset-arrow-handle {
+      display: none !important;
+      opacity: 0 !important;
+      visibility: hidden !important;
+    }
+
+
     @page {
       margin: 0;
       size: 17in 11in;
@@ -784,6 +884,18 @@
         overflow: hidden;
         width: 17in;
       }
+
+      .export-download-panel,
+      .export-frame-button,
+      .resize-handle,
+      .frame-resize-handle,
+      .frame-rotate-handle,
+      .phase-inset-resize-handle,
+      .phase-inset-arrow-handle {
+        display: none !important;
+        opacity: 0 !important;
+        visibility: hidden !important;
+      }
     }
   </style>
 </head>
@@ -794,6 +906,32 @@ if (new URLSearchParams(window.location.search).get("print") === "1") {
 }
 </script>
 <button class="export-frame-button" type="button" onclick="openFrameExport()">Export map to frame</button>
+
+<div class="export-download-panel" id="exportDownloadPanel">
+  <div class="export-download-title">Download 11×17 Map</div>
+
+  <label for="exportDownloadFormat">Format</label>
+  <select id="exportDownloadFormat">
+    <option value="pdf" selected>PDF - 11×17 Landscape</option>
+    <option value="png">PNG - 11×17 Landscape</option>
+    <option value="jpeg">JPEG - 11×17 Landscape</option>
+  </select>
+
+  <label for="exportDownloadDpi">Quality</label>
+  <select id="exportDownloadDpi">
+    <option value="150">150 DPI</option>
+    <option value="200">200 DPI</option>
+    <option value="300" selected>300 DPI</option>
+  </select>
+
+  <button type="button" onclick="downloadPrintMap()">Download Map</button>
+  <button type="button" class="secondary" onclick="window.print()">Browser Print / Save PDF</button>
+
+  <div class="export-download-note">
+    Default output is 17×11 inches with the existing ¼-inch white margin around the frame.
+  </div>
+  <div class="export-download-status" id="exportDownloadStatus"></div>
+</div>
 <div class="print-page" aria-hidden="true">
   <div class="frame-border"></div>
   <div class="frame-title-panel">
@@ -853,6 +991,9 @@ if (new URLSearchParams(window.location.search).get("print") === "1") {
   </div>
 </div>
 <div id="map"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 
 <script>
 let map;
@@ -1301,6 +1442,124 @@ function openFrameExport() {
   printUrl.searchParams.set("print", "1");
   window.open(printUrl.toString(), "_blank", "noopener,noreferrer");
 }
+
+function setExportDownloadStatus(message) {
+  const status = document.getElementById("exportDownloadStatus");
+  if (status) status.textContent = message || "";
+}
+
+function downloadDataUrl(dataUrl, filename) {
+  const link = document.createElement("a");
+  link.href = dataUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
+function getSafeExportFilename(extension) {
+  const date = new Date();
+  const stamp = [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0")
+  ].join("-");
+
+  return `GWR_Corridor_Exhibit_11x17_${stamp}.${extension}`;
+}
+
+function waitForExportReady() {
+  return new Promise(resolve => {
+    updateScaleBar();
+    updateAllPhaseInsetLeaders();
+
+    // Give Google imagery, labels, custom overlays, and inset maps time to finish drawing.
+    window.setTimeout(() => {
+      updateScaleBar();
+      updateAllPhaseInsetLeaders();
+      resolve();
+    }, 1200);
+  });
+}
+
+async function downloadPrintMap() {
+  if (!IS_PRINT_VIEW) {
+    openFrameExport();
+    return;
+  }
+
+  if (!window.html2canvas) {
+    alert("The export library has not finished loading yet. Please wait a moment and try again.");
+    return;
+  }
+
+  const format = document.getElementById("exportDownloadFormat")?.value || "pdf";
+  const dpi = Number(document.getElementById("exportDownloadDpi")?.value || 300);
+  const cssDpi = 96;
+  const scale = dpi / cssDpi;
+
+  try {
+    setExportDownloadStatus("Preparing high-resolution export...");
+    document.body.classList.add("is-exporting");
+
+    await waitForExportReady();
+
+    const pageWidthPx = Math.round(17 * cssDpi);
+    const pageHeightPx = Math.round(11 * cssDpi);
+
+    const canvas = await html2canvas(document.body, {
+      backgroundColor: "#ffffff",
+      useCORS: true,
+      allowTaint: false,
+      logging: false,
+      scale: scale,
+      x: 0,
+      y: 0,
+      scrollX: 0,
+      scrollY: 0,
+      width: pageWidthPx,
+      height: pageHeightPx,
+      windowWidth: pageWidthPx,
+      windowHeight: pageHeightPx
+    });
+
+    if (format === "pdf") {
+      if (!window.jspdf?.jsPDF) {
+        alert("The PDF export library has not finished loading yet. Please wait a moment and try again.");
+        return;
+      }
+
+      const imageData = canvas.toDataURL("image/jpeg", 0.98);
+      const pdf = new window.jspdf.jsPDF({
+        orientation: "landscape",
+        unit: "in",
+        format: [17, 11],
+        compress: true
+      });
+
+      pdf.addImage(imageData, "JPEG", 0, 0, 17, 11, undefined, "FAST");
+      pdf.save(getSafeExportFilename("pdf"));
+    }
+    else if (format === "png") {
+      downloadDataUrl(canvas.toDataURL("image/png"), getSafeExportFilename("png"));
+    }
+    else {
+      downloadDataUrl(canvas.toDataURL("image/jpeg", 0.98), getSafeExportFilename("jpg"));
+    }
+
+    setExportDownloadStatus("Download complete.");
+  }
+  catch (error) {
+    console.error("Export failed:", error);
+    setExportDownloadStatus("Export failed. Try Browser Print / Save PDF.");
+    alert("The export failed. If the satellite imagery blocked image capture, use the Browser Print / Save PDF button instead.");
+  }
+  finally {
+    document.body.classList.remove("is-exporting");
+    window.setTimeout(() => setExportDownloadStatus(""), 3500);
+  }
+}
+
 
 function setPrintFrameDate() {
   const dateElement = document.getElementById("frameDate");
