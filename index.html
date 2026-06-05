@@ -543,10 +543,12 @@
       border-radius: 4px;
       box-shadow: 0 2px 10px rgba(0, 0, 0, 0.28);
       box-sizing: border-box;
+      cursor: move;
       display: none;
       font-family: Arial, sans-serif;
       overflow: hidden;
       position: absolute;
+      user-select: none;
       z-index: 4;
     }
 
@@ -571,6 +573,7 @@
     .phase-inset-map {
       bottom: 0;
       left: 0;
+      pointer-events: none;
       position: absolute;
       right: 0;
       top: 0.34in;
@@ -622,8 +625,49 @@
     .inset-map-label.measurement {
       background: rgba(255, 249, 196, 0.95);
       border-color: rgba(111, 78, 0, 0.72);
-      font-size: 8px;
+      font-size: 7px;
       padding: 1px 3px;
+    }
+
+    .phase-inset-resize-handle {
+      background: #ffffff;
+      border: 1px solid #111827;
+      border-radius: 50%;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+      height: 10px;
+      opacity: 0;
+      position: absolute;
+      transition: opacity 0.12s ease;
+      width: 10px;
+      z-index: 5;
+    }
+
+    .phase-inset:hover .phase-inset-resize-handle {
+      opacity: 1;
+    }
+
+    .phase-inset-resize-handle.nw {
+      cursor: nwse-resize;
+      left: -6px;
+      top: -6px;
+    }
+
+    .phase-inset-resize-handle.ne {
+      cursor: nesw-resize;
+      right: -6px;
+      top: -6px;
+    }
+
+    .phase-inset-resize-handle.sw {
+      bottom: -6px;
+      cursor: nesw-resize;
+      left: -6px;
+    }
+
+    .phase-inset-resize-handle.se {
+      bottom: -6px;
+      cursor: nwse-resize;
+      right: -6px;
     }
 
     @page {
@@ -667,14 +711,14 @@ if (new URLSearchParams(window.location.search).get("print") === "1") {
       </div>
     </div>
   </div>
-  <div class="phase-inset phase-one">
+  <div class="phase-inset phase-one" data-phase-inset-id="phase1">
     <div class="phase-inset-title">
       <span>Phase 1</span>
       <span class="phase-inset-note">GWB corridor</span>
     </div>
     <div id="phase1InsetMap" class="phase-inset-map"></div>
   </div>
-  <div class="phase-inset phase-two">
+  <div class="phase-inset phase-two" data-phase-inset-id="phase2">
     <div class="phase-inset-title">
       <span>Phase 2</span>
       <span class="phase-inset-note">Opened June 2024</span>
@@ -689,6 +733,8 @@ let map;
 let roadsLayer;
 let roadsInfoWindow;
 let selectedRoadFeature;
+const phaseInsetMaps = {};
+const phaseInsetBounds = {};
 
 const LAYER_Z_INDEX = {
   default: 10,
@@ -734,6 +780,7 @@ const MILEAGE_DESTINATION_IDS = ["phase3", "longValleyTrails", "rws", "alaia", "
 
 const CALLOUT_STORAGE_KEY = "gwrExhibitCallouts";
 const FURNITURE_STORAGE_KEY = "gwrExhibitFurniture";
+const PHASE_INSET_STORAGE_KEY = "gwrPhaseInsetFrames";
 const IS_PRINT_VIEW = new URLSearchParams(window.location.search).get("print") === "1";
 
 const LAND_USE_COLORS = {
@@ -1301,6 +1348,133 @@ function resetFrameAdjustments() {
   window.location.reload();
 }
 
+function initPhaseInsetAdjustables() {
+  if (!IS_PRINT_VIEW) return;
+
+  document.querySelectorAll(".phase-inset[data-phase-inset-id]").forEach(inset => {
+    const id = inset.dataset.phaseInsetId;
+    const saved = getSavedPositions(PHASE_INSET_STORAGE_KEY, id);
+
+    if (saved) {
+      inset.style.left = `${saved.left}px`;
+      inset.style.top = `${saved.top}px`;
+      inset.style.width = `${saved.width}px`;
+      inset.style.height = `${saved.height}px`;
+    }
+
+    ["nw", "ne", "sw", "se"].forEach(corner => {
+      const handle = document.createElement("span");
+      handle.className = `phase-inset-resize-handle ${corner}`;
+      inset.appendChild(handle);
+      enablePhaseInsetResize(inset, handle, id, corner);
+    });
+
+    enablePhaseInsetDrag(inset, id);
+  });
+}
+
+function savePhaseInsetFrame(id, inset) {
+  savePositions(PHASE_INSET_STORAGE_KEY, id, {
+    left: inset.offsetLeft,
+    top: inset.offsetTop,
+    width: inset.offsetWidth,
+    height: inset.offsetHeight
+  });
+}
+
+function refreshPhaseInsetMap(id) {
+  const insetMap = phaseInsetMaps[id];
+  const bounds = phaseInsetBounds[id];
+  if (!insetMap || !bounds) return;
+
+  window.setTimeout(() => {
+    google.maps.event.trigger(insetMap, "resize");
+    fitMapToDataBounds(insetMap, bounds);
+  }, 0);
+}
+
+function enablePhaseInsetDrag(inset, id) {
+  inset.addEventListener("mousedown", event => {
+    if (event.target.classList.contains("phase-inset-resize-handle")) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const startMouse = { x: event.clientX, y: event.clientY };
+    const startLeft = inset.offsetLeft;
+    const startTop = inset.offsetTop;
+
+    const move = moveEvent => {
+      inset.style.left = `${startLeft + moveEvent.clientX - startMouse.x}px`;
+      inset.style.top = `${startTop + moveEvent.clientY - startMouse.y}px`;
+    };
+
+    const up = () => {
+      savePhaseInsetFrame(id, inset);
+      refreshPhaseInsetMap(id);
+      document.removeEventListener("mousemove", move);
+      document.removeEventListener("mouseup", up);
+    };
+
+    document.addEventListener("mousemove", move);
+    document.addEventListener("mouseup", up);
+  });
+}
+
+function enablePhaseInsetResize(inset, handle, id, corner) {
+  handle.addEventListener("mousedown", event => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const startMouse = { x: event.clientX, y: event.clientY };
+    const startFrame = {
+      left: inset.offsetLeft,
+      top: inset.offsetTop,
+      width: inset.offsetWidth,
+      height: inset.offsetHeight
+    };
+
+    const move = moveEvent => {
+      const dx = moveEvent.clientX - startMouse.x;
+      const dy = moveEvent.clientY - startMouse.y;
+      let nextLeft = startFrame.left;
+      let nextTop = startFrame.top;
+      let nextWidth = startFrame.width;
+      let nextHeight = startFrame.height;
+
+      if (corner.includes("e")) nextWidth = startFrame.width + dx;
+      if (corner.includes("s")) nextHeight = startFrame.height + dy;
+      if (corner.includes("w")) {
+        nextLeft = startFrame.left + dx;
+        nextWidth = startFrame.width - dx;
+      }
+      if (corner.includes("n")) {
+        nextTop = startFrame.top + dy;
+        nextHeight = startFrame.height - dy;
+      }
+
+      nextWidth = Math.max(190, nextWidth);
+      nextHeight = Math.max(145, nextHeight);
+
+      inset.style.left = `${nextLeft}px`;
+      inset.style.top = `${nextTop}px`;
+      inset.style.width = `${nextWidth}px`;
+      inset.style.height = `${nextHeight}px`;
+      refreshPhaseInsetMap(id);
+    };
+
+    const up = () => {
+      savePhaseInsetFrame(id, inset);
+      refreshPhaseInsetMap(id);
+      document.removeEventListener("mousemove", move);
+      document.removeEventListener("mouseup", up);
+    };
+
+    document.addEventListener("mousemove", move);
+    document.addEventListener("mouseup", up);
+  });
+}
+
 
 function normalizePoint(position) {
   if (typeof position.lat === "function") {
@@ -1856,31 +2030,50 @@ function addInsetHtmlMapLabel(targetMap, position, html, className = "") {
 }
 
 function addRoadWidthMeasurementsToMap(targetMap, features, roadIds) {
-  features
+  const samples = features
     .filter(feature => roadIds.has(feature.properties.objectid))
-    .forEach(feature => {
-      getRoadWidthSamples(feature).forEach(sample => {
-        const path = [
-          { lng: sample.lng, lat: sample.startLat },
-          { lng: sample.lng, lat: sample.endLat }
-        ];
+    .flatMap(feature => getRoadWidthSamples(feature));
+  const representativeSamples = getRepresentativeWidthSamples(samples, 4);
 
-        new google.maps.Polyline({
-          path: path,
-          map: targetMap,
-          strokeColor: "#FFF176",
-          strokeOpacity: 1,
-          strokeWeight: 2,
-          clickable: false,
-          zIndex: LAYER_Z_INDEX.exhibit + 20
-        });
+  representativeSamples.forEach(sample => {
+    const path = [
+      { lng: sample.lng, lat: sample.startLat },
+      { lng: sample.lng, lat: sample.endLat }
+    ];
 
-        addInsetHtmlMapLabel(targetMap, {
-          lng: sample.lng,
-          lat: (sample.startLat + sample.endLat) / 2
-        }, `${sample.feet} ft`, "measurement");
-      });
+    new google.maps.Polyline({
+      path: path,
+      map: targetMap,
+      strokeColor: "#FFF176",
+      strokeOpacity: 1,
+      strokeWeight: 2,
+      clickable: false,
+      zIndex: LAYER_Z_INDEX.exhibit + 20
     });
+
+    addInsetHtmlMapLabel(targetMap, {
+      lng: sample.lng,
+      lat: (sample.startLat + sample.endLat) / 2
+    }, `${sample.feet} ft`, "measurement");
+  });
+}
+
+function getRepresentativeWidthSamples(samples, maxCount) {
+  if (samples.length <= maxCount) return samples;
+
+  const sorted = [...samples].sort((first, second) => first.lng - second.lng);
+  const selected = [];
+
+  for (let index = 0; index < maxCount; index++) {
+    const sortedIndex = Math.round(index * (sorted.length - 1) / (maxCount - 1));
+    const candidate = sorted[sortedIndex];
+
+    if (!selected.some(sample => Math.abs(sample.lng - candidate.lng) < 0.00008 && Math.abs(sample.feet - candidate.feet) <= 2)) {
+      selected.push(candidate);
+    }
+  }
+
+  return selected;
 }
 
 function getFeaturesBounds(features) {
@@ -1987,6 +2180,7 @@ function createPhaseInsetMap(config, roadsData, cityData) {
     scrollwheel: false,
     tilt: 0
   });
+  phaseInsetMaps[config.id] = insetMap;
 
   addInsetRoadLayer(insetMap, roadsData, config.roadIds);
   addInsetCityLayer(insetMap, cityData);
@@ -1994,6 +2188,7 @@ function createPhaseInsetMap(config, roadsData, cityData) {
   const phaseFeatures = (roadsData.features || []).filter(feature => config.roadIds.has(feature.properties.objectid));
   if (phaseFeatures.length > 0) {
     const phaseBounds = getFeaturesBounds(phaseFeatures);
+    phaseInsetBounds[config.id] = phaseBounds;
     fitMapToDataBounds(insetMap, phaseBounds);
     addRoadWidthMeasurementsToMap(insetMap, phaseFeatures, config.roadIds);
 
@@ -2288,6 +2483,7 @@ function initMap() {
   if (IS_PRINT_VIEW) {
     setPrintFrameDate();
     initFrameAdjustables();
+    initPhaseInsetAdjustables();
   }
 
   roadsInfoWindow = new google.maps.InfoWindow();
