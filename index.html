@@ -230,6 +230,37 @@ function getFeatureCenterInsideBounds(feature, bounds) {
   }, { lng: 0, lat: 0 });
 }
 
+function getFeaturePointNearTargetInsideBounds(feature, bounds, target) {
+  const visibleBounds = getBoundsIntersection(getFeatureBounds(feature), bounds);
+
+  if (!visibleBounds) return null;
+
+  const columns = 36;
+  const rows = 36;
+  let bestPoint = null;
+  let bestDistance = Infinity;
+
+  for (let column = 0; column <= columns; column++) {
+    for (let row = 0; row <= rows; row++) {
+      const point = {
+        lng: visibleBounds.minLng + (visibleBounds.maxLng - visibleBounds.minLng) * column / columns,
+        lat: visibleBounds.minLat + (visibleBounds.maxLat - visibleBounds.minLat) * row / rows
+      };
+
+      if (!isPointInFeature(point, feature)) continue;
+
+      const distance = Math.hypot(point.lng - target.lng, point.lat - target.lat);
+
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestPoint = point;
+      }
+    }
+  }
+
+  return bestPoint;
+}
+
 function addOpenSpaceHatch(feature) {
   getFeatureRings(feature).forEach(ring => {
     const bounds = getFeatureBounds({ geometry: { type: "Polygon", coordinates: [ring] } });
@@ -556,10 +587,13 @@ function labelGLWLongValleyLayer() {
       if (!shouldLabelFeature(feature, "landusecode", {})) return;
 
       const labelText = String(feature.properties.landusecode || "");
-      const center = getFeatureCenterInsideBounds(feature, printBounds) || getFeatureLabelCenter(feature);
+      let center = getFeatureCenterInsideBounds(feature, printBounds) || getFeatureLabelCenter(feature);
 
       if (labelText === "LD") {
-        center.lng = Math.min(center.lng, printBounds.maxLng - 0.0028);
+        center = getFeaturePointNearTargetInsideBounds(feature, printBounds, {
+          lng: printBounds.maxLng - 0.00165,
+          lat: center.lat
+        }) || center;
       }
 
       addMapLabel(labelText, center);
