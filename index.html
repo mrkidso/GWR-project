@@ -80,25 +80,83 @@
       transform: translate(-50%, -50%);
     }
 
-    .north-arrow {
-      font-size: 22px;
-      font-weight: 700;
+    .map-label.north-arrow,
+    .map-label.scale-bar {
+      background: transparent;
+      border: 0;
+      box-shadow: none;
+      max-width: none;
+      min-width: 0;
+      padding: 0;
+    }
+
+    .north-arrow-art {
+      height: 156px;
+      position: relative;
+      width: 72px;
+    }
+
+    .north-arrow-art svg {
+      display: block;
+      filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.7));
+      height: 100%;
+      width: 100%;
+    }
+
+    .scale-bar-art {
+      align-items: flex-end;
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid rgba(20, 20, 20, 0.35);
+      color: #000000;
+      display: inline-flex;
+      font-family: Arial, sans-serif;
+      gap: 6px;
+      padding: 4px 7px 5px;
+    }
+
+    .scale-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .scale-labels {
+      display: grid;
+      font-size: 18px;
+      font-weight: 400;
+      grid-template-columns: repeat(5, 96px);
+      line-height: 1;
       text-align: center;
     }
 
-    .map-label.north-arrow {
-      max-width: 44px;
-      min-width: 34px;
-      padding: 5px;
+    .scale-labels span:first-child {
+      text-align: left;
     }
 
-    .scale-line {
-      border-bottom: 4px solid #1f2933;
-      border-left: 2px solid #1f2933;
-      border-right: 2px solid #1f2933;
-      height: 8px;
-      margin-top: 4px;
-      width: 96px;
+    .scale-labels span:last-child {
+      text-align: right;
+    }
+
+    .scale-blocks {
+      border: 2px solid #000000;
+      display: grid;
+      grid-template-columns: repeat(10, 48px);
+      height: 18px;
+      width: 480px;
+    }
+
+    .scale-blocks span:nth-child(odd) {
+      background: #000000;
+    }
+
+    .scale-blocks span:nth-child(even) {
+      background: #ffffff;
+    }
+
+    .scale-units {
+      font-size: 18px;
+      line-height: 1;
+      padding-bottom: 1px;
     }
 
     .legend-row {
@@ -149,6 +207,7 @@ const EXHIBIT_POINTS = {
 };
 
 const CALLOUT_STORAGE_KEY = "gwrExhibitCallouts";
+const FURNITURE_STORAGE_KEY = "gwrExhibitFurniture";
 
 const LAND_USE_COLORS = {
   HCOM: "#E15B5D",
@@ -546,11 +605,11 @@ function enableLabelDragging(overlay, element, onMove) {
   });
 }
 
-function getSavedCalloutPositions(id) {
+function getSavedPositions(storageKey, id) {
   if (!id) return null;
 
   try {
-    const saved = JSON.parse(localStorage.getItem(CALLOUT_STORAGE_KEY) || "{}");
+    const saved = JSON.parse(localStorage.getItem(storageKey) || "{}");
     return saved[id] || null;
   }
   catch {
@@ -558,20 +617,28 @@ function getSavedCalloutPositions(id) {
   }
 }
 
-function saveCalloutPositions(id, labelPosition, targetPosition) {
+function savePositions(storageKey, id, value) {
   if (!id) return;
 
   try {
-    const saved = JSON.parse(localStorage.getItem(CALLOUT_STORAGE_KEY) || "{}");
-    saved[id] = {
-      label: labelPosition,
-      target: targetPosition
-    };
-    localStorage.setItem(CALLOUT_STORAGE_KEY, JSON.stringify(saved));
+    const saved = JSON.parse(localStorage.getItem(storageKey) || "{}");
+    saved[id] = value;
+    localStorage.setItem(storageKey, JSON.stringify(saved));
   }
   catch {
     // If browser storage is unavailable, the map still remains adjustable for the current session.
   }
+}
+
+function getSavedCalloutPositions(id) {
+  return getSavedPositions(CALLOUT_STORAGE_KEY, id);
+}
+
+function saveCalloutPositions(id, labelPosition, targetPosition) {
+  savePositions(CALLOUT_STORAGE_KEY, id, {
+    label: labelPosition,
+    target: targetPosition
+  });
 }
 
 function addCallout(labelPosition, targetPosition, html, className = "callout", id = null) {
@@ -638,15 +705,50 @@ function addCallout(labelPosition, targetPosition, html, className = "callout", 
   });
 }
 
-function addExhibitControls() {
-  addHtmlMapLabel({ lng: -113.5965, lat: 37.1000 }, "N<br>&uarr;", "map-control north-arrow");
+function addAdjustableMapFurniture(id, position, html, className) {
+  const savedPosition = getSavedPositions(FURNITURE_STORAGE_KEY, id);
+  const startPosition = savedPosition || position;
 
-  addHtmlMapLabel({ lng: -113.5920, lat: 37.0408 }, `
-    <strong>Scale</strong><br>
-    1:30,000
-    <div class="scale-line"></div>
-    <div>0.5 mile approx.</div>
-  `, "map-control");
+  return addHtmlMapLabel(startPosition, html, className, {
+    draggable: true,
+    onPositionChanged: newPosition => {
+      savePositions(FURNITURE_STORAGE_KEY, id, normalizePoint(newPosition));
+    }
+  });
+}
+
+function addExhibitControls() {
+  addAdjustableMapFurniture("northArrow", { lng: -113.5965, lat: 37.1000 }, `
+    <div class="north-arrow-art">
+      <svg viewBox="0 0 72 156" aria-label="North arrow">
+        <path d="M36 2 C34 28 27 48 19 70 L28 74 L35 39 L35 151 Q35 154 38 154 Q41 154 41 151 L41 41 L51 75 L59 70 C48 49 40 27 36 2 Z" fill="rgba(0,0,0,0.78)" stroke="#ffffff" stroke-width="7" stroke-linejoin="round"/>
+        <path d="M36 2 C34 28 27 48 19 70 L28 74 L35 39 L35 151 Q35 154 38 154 Q41 154 41 151 L41 41 L51 75 L59 70 C48 49 40 27 36 2 Z" fill="rgba(0,0,0,0.78)" stroke="#111111" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M33 92 C19 91 6 105 4 123 C3 135 9 141 19 136 C29 131 35 118 33 107 C32 101 28 99 23 103 C16 109 13 121 16 125 C19 128 25 123 29 116" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M33 92 C19 91 6 105 4 123 C3 135 9 141 19 136 C29 131 35 118 33 107 C32 101 28 99 23 103 C16 109 13 121 16 125 C19 128 25 123 29 116" fill="none" stroke="#111111" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M40 126 C49 104 58 91 64 98 C68 103 58 110 51 119 C45 128 43 138 41 149" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M40 126 C49 104 58 91 64 98 C68 103 58 110 51 119 C45 128 43 138 41 149" fill="none" stroke="#111111" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+  `, "north-arrow");
+
+  addAdjustableMapFurniture("scaleBar", { lng: -113.5750, lat: 37.0410 }, `
+    <div class="scale-bar-art">
+      <div class="scale-stack">
+        <div class="scale-labels">
+          <span>0</span>
+          <span>0.25</span>
+          <span>0.5</span>
+          <span>0.75</span>
+          <span>1</span>
+        </div>
+        <div class="scale-blocks">
+          <span></span><span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span><span></span>
+        </div>
+      </div>
+      <div class="scale-units">Miles</div>
+    </div>
+  `, "scale-bar");
 
   addHtmlMapLabel({ lng: -113.4805, lat: 37.0426 }, `
     <strong>Legend</strong>
