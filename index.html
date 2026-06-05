@@ -284,7 +284,7 @@
       left: 0.25in;
       position: absolute;
       top: 0.25in;
-      width: 16in;
+      width: var(--print-map-width, 16in);
       z-index: 1;
     }
 
@@ -304,7 +304,7 @@
       pointer-events: none;
       position: absolute;
       top: 0.25in;
-      width: 16.5in;
+      width: var(--print-frame-width, 16.5in);
       z-index: 2;
     }
 
@@ -316,7 +316,7 @@
       border-top: 2px solid #111111;
       box-sizing: border-box;
       height: 10.5in;
-      left: 16.25in;
+      left: var(--print-panel-left, 16.25in);
       position: absolute;
       top: 0.25in;
       width: 0.5in;
@@ -847,59 +847,86 @@ function getGeoJsonBounds(data) {
   });
 }
 
-function fitMapToBoundingBox() {
-  // Unlike fitBounds(), this keeps the visible map viewport INSIDE the
-  // bounding Box.geojson extent. That means the exported frame will not
-  // show imagery or features beyond the bounding box, even if some map
-  // content gets cut off at the frame edges.
-  fetch("bounding Box.geojson")
-    .then(response => response.json())
-    .then(data => {
-      const bounds = getGeoJsonBounds(data);
-      setMapViewportInsideBounds(bounds);
-    });
+function lngToWorldX(lng) {
+  return (lng + 180) / 360;
 }
 
-function latToMercatorY(lat) {
+function latToWorldY(lat) {
   const sinLat = Math.sin(lat * Math.PI / 180);
   return 0.5 - Math.log((1 + sinLat) / (1 - sinLat)) / (4 * Math.PI);
 }
 
-function mercatorYToLat(y) {
-  return 180 / Math.PI * Math.atan(Math.sinh(Math.PI * (1 - 2 * y)));
+function worldYToLat(y) {
+  const mercatorN = Math.PI * (1 - 2 * y);
+  return Math.atan(Math.sinh(mercatorN)) * 180 / Math.PI;
 }
 
-function setMapViewportInsideBounds(bounds) {
-  const mapDiv = map.getDiv();
-  const widthPx = mapDiv.clientWidth || window.innerWidth;
-  const heightPx = mapDiv.clientHeight || window.innerHeight;
+function getMercatorAspect(bounds) {
+  const westX = lngToWorldX(bounds.minLng);
+  const eastX = lngToWorldX(bounds.maxLng);
+  const northY = latToWorldY(bounds.maxLat);
+  const southY = latToWorldY(bounds.minLat);
 
-  const west = bounds.minLng;
-  const east = bounds.maxLng;
-  const south = bounds.minLat;
-  const north = bounds.maxLat;
+  return (eastX - westX) / (southY - northY);
+}
 
-  const lngSpan = Math.abs(east - west);
-  const yNorth = latToMercatorY(north);
-  const ySouth = latToMercatorY(south);
-  const ySpan = Math.abs(ySouth - yNorth);
+function setPrintMapFrameToBounds(bounds) {
+  if (!IS_PRINT_VIEW) return;
 
-  const lngFraction = lngSpan / 360;
-  const latFraction = ySpan;
+  const mapHeightIn = 10.5;
+  const titlePanelWidthIn = 0.5;
+  const mapLeftIn = 0.25;
+  const mapWidthIn = mapHeightIn * getMercatorAspect(bounds);
 
-  const zoomForWidth = Math.log2(widthPx / (256 * lngFraction));
-  const zoomForHeight = Math.log2(heightPx / (256 * latFraction));
+  document.documentElement.style.setProperty("--print-map-width", `${mapWidthIn}in`);
+  document.documentElement.style.setProperty("--print-panel-left", `${mapLeftIn + mapWidthIn}in`);
+  document.documentElement.style.setProperty("--print-frame-width", `${mapWidthIn + titlePanelWidthIn}in`);
+}
 
-  // Use the larger zoom so both the viewport width and height fit within
-  // the bbox. A tiny bump protects against sub-pixel rounding showing slivers
-  // outside the requested extent.
-  const targetZoom = Math.max(0, Math.max(zoomForWidth, zoomForHeight) + 0.02);
+function setMapToExactBounds(bounds) {
+  const mapDiv = document.getElementById("map");
+  const width = mapDiv.clientWidth;
+  const height = mapDiv.clientHeight;
 
-  const centerLng = (west + east) / 2;
-  const centerLat = mercatorYToLat((yNorth + ySouth) / 2);
+  if (!width || !height) return;
 
-  map.setCenter({ lat: centerLat, lng: centerLng });
-  map.setZoom(targetZoom);
+  const westX = lngToWorldX(bounds.minLng);
+  const eastX = lngToWorldX(bounds.maxLng);
+  const northY = latToWorldY(bounds.maxLat);
+  const southY = latToWorldY(bounds.minLat);
+
+  const centerX = (westX + eastX) / 2;
+  const centerY = (northY + southY) / 2;
+
+  const zoomX = Math.log2(width / ((eastX - westX) * 256));
+  const zoomY = Math.log2(height / ((southY - northY) * 256));
+  const zoom = Math.min(zoomX, zoomY);
+
+  map.setCenter({
+    lng: centerX * 360 - 180,
+    lat: worldYToLat(centerY)
+  });
+
+  map.setZoom(zoom);
+}
+
+function fitMapToBoundingBox() {
+  fetch("bounding Box.geojson")
+    .then(response => response.json())
+    .then(data => {
+      const bounds = getGeoJsonBounds(data);
+
+      setPrintMapFrameToBounds(bounds);
+
+      requestAnimationFrame(() => {
+        google.maps.event.trigger(map, "resize");
+        setMapToExactBounds(bounds);
+      });
+
+      google.maps.event.addListenerOnce(map, "idle", () => {
+        setMapToExactBounds(bounds);
+      });
+    });
 }
 
 function openFrameExport() {
