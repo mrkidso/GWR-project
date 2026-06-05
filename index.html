@@ -384,15 +384,19 @@
       width: 2.8in;
     }
 
-    .frame-logo-image {
+    .frame-logo-box {
       bottom: 0.10in;
-      display: block;
       height: auto;
       left: -0.43in;
       position: absolute;
-      transform: rotate(-90deg);
-      transform-origin: center;
       width: 1.36in;
+    }
+
+    .frame-logo-image {
+      display: block;
+      height: auto;
+      pointer-events: none;
+      width: 100%;
     }
 
     .frame-title-panel .frame-adjustable {
@@ -429,7 +433,25 @@
       opacity: 1;
     }
 
-    .frame-resize-handle {
+    .frame-resize-handle.nw {
+      cursor: nwse-resize;
+      left: -9px;
+      top: -9px;
+    }
+
+    .frame-resize-handle.ne {
+      cursor: nesw-resize;
+      right: -9px;
+      top: -9px;
+    }
+
+    .frame-resize-handle.sw {
+      bottom: -9px;
+      cursor: nesw-resize;
+      left: -9px;
+    }
+
+    .frame-resize-handle.se {
       bottom: -9px;
       cursor: nwse-resize;
       right: -9px;
@@ -438,7 +460,7 @@
     .frame-rotate-handle {
       cursor: grab;
       left: 50%;
-      top: -17px;
+      top: -22px;
       transform: translateX(-50%);
     }
 
@@ -487,7 +509,9 @@ if (new URLSearchParams(window.location.search).get("print") === "1") {
         Washington City, UT 84780<br>
         (435) 656-6300
       </div>
-      <img src="washington-city-logo.png" alt="Washington City Logo" class="frame-logo-image frame-adjustable" data-frame-id="frameLogo" data-default-rotate="-90">
+      <div class="frame-logo-box frame-adjustable" data-frame-id="frameLogo" data-default-rotate="90">
+        <img src="washington-city-logo.png" alt="Washington City Logo" class="frame-logo-image">
+      </div>
     </div>
   </div>
 </div>
@@ -913,10 +937,12 @@ function saveFrameAdjustment(id, element) {
 
 function addFrameElementHandles(element, id) {
   if (!element.querySelector(".frame-resize-handle")) {
-    const resizeHandle = document.createElement("span");
-    resizeHandle.className = "frame-resize-handle";
-    element.appendChild(resizeHandle);
-    enableFrameResize(element, resizeHandle, id);
+    ["nw", "ne", "sw", "se"].forEach(corner => {
+      const resizeHandle = document.createElement("span");
+      resizeHandle.className = `frame-resize-handle ${corner}`;
+      element.appendChild(resizeHandle);
+      enableFrameResize(element, resizeHandle, id, corner);
+    });
   }
 
   if (!element.querySelector(".frame-rotate-handle")) {
@@ -956,7 +982,7 @@ function enableFrameDrag(element, id) {
   });
 }
 
-function enableFrameResize(element, handle, id) {
+function enableFrameResize(element, handle, id, corner) {
   handle.addEventListener("mousedown", event => {
     event.preventDefault();
     event.stopPropagation();
@@ -965,9 +991,13 @@ function enableFrameResize(element, handle, id) {
     const startScale = Number(element.style.getPropertyValue("--frame-scale") || 1);
 
     const move = moveEvent => {
-      const distance = Math.hypot(moveEvent.clientX - startMouse.x, moveEvent.clientY - startMouse.y);
-      const direction = Math.sign((moveEvent.clientX - startMouse.x) + (moveEvent.clientY - startMouse.y)) || 1;
-      const nextScale = Math.max(0.15, Math.min(4, startScale + direction * distance / 160));
+      const dx = moveEvent.clientX - startMouse.x;
+      const dy = moveEvent.clientY - startMouse.y;
+      const dragDistance = Math.hypot(dx, dy);
+      const direction = corner === "nw" || corner === "sw"
+        ? Math.sign(startMouse.x - moveEvent.clientX)
+        : Math.sign(moveEvent.clientX - startMouse.x);
+      const nextScale = Math.max(0.15, Math.min(5, startScale + (direction || 1) * dragDistance / 180));
 
       element.style.setProperty("--frame-scale", Number(nextScale.toFixed(3)));
     };
