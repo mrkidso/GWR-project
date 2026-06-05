@@ -47,6 +47,12 @@
       text-align: left;
     }
 
+    .map-label.adjustable {
+      cursor: move;
+      pointer-events: auto;
+      user-select: none;
+    }
+
     .map-label.measurement {
       background: rgba(255, 249, 196, 0.9);
       border-color: rgba(111, 78, 0, 0.6);
@@ -141,6 +147,8 @@ const EXHIBIT_POINTS = {
   phase2: { lng: -113.4986, lat: 37.0849 },
   phase3: { lng: -113.5627, lat: 37.0850 }
 };
+
+const CALLOUT_STORAGE_KEY = "gwrExhibitCallouts";
 
 const LAND_USE_COLORS = {
   HCOM: "#E15B5D",
@@ -452,20 +460,45 @@ function fitMapToBoundingBox() {
     });
 }
 
-function addHtmlMapLabel(position, html, className = "") {
+function normalizePoint(position) {
+  if (typeof position.lat === "function") {
+    return {
+      lat: position.lat(),
+      lng: position.lng()
+    };
+  }
+
+  return {
+    lat: position.lat,
+    lng: position.lng
+  };
+}
+
+function addHtmlMapLabel(position, html, className = "", options = {}) {
   const overlay = new google.maps.OverlayView();
+  let labelPosition = normalizePoint(position);
   let div;
 
   overlay.onAdd = function() {
     div = document.createElement("div");
-    div.className = `map-label ${className}`.trim();
+    div.className = `map-label ${className} ${options.draggable ? "adjustable" : ""}`.trim();
     div.innerHTML = html;
+    div.title = options.draggable ? "Drag to move this label" : "";
+
+    if (options.draggable) {
+      enableLabelDragging(overlay, div, position => {
+        labelPosition = position;
+        overlay.draw();
+        if (options.onPositionChanged) options.onPositionChanged(position);
+      });
+    }
+
     this.getPanes().floatPane.appendChild(div);
   };
 
   overlay.draw = function() {
     const projection = this.getProjection();
-    const point = projection.fromLatLngToDivPixel(new google.maps.LatLng(position.lat, position.lng));
+    const point = projection.fromLatLngToDivPixel(new google.maps.LatLng(labelPosition.lat, labelPosition.lng));
 
     if (!point || !div) return;
     div.style.left = `${point.x}px`;
@@ -480,9 +513,80 @@ function addHtmlMapLabel(position, html, className = "") {
   return overlay;
 }
 
-function addCallout(labelPosition, targetPosition, html, className = "callout") {
-  new google.maps.Polyline({
-    path: [labelPosition, targetPosition],
+function enableLabelDragging(overlay, element, onMove) {
+  element.addEventListener("mousedown", event => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const projection = overlay.getProjection();
+    const startMouse = { x: event.clientX, y: event.clientY };
+    const startLeft = parseFloat(element.style.left || "0");
+    const startTop = parseFloat(element.style.top || "0");
+
+    map.setOptions({ draggable: false });
+
+    const move = moveEvent => {
+      const point = new google.maps.Point(
+        startLeft + moveEvent.clientX - startMouse.x,
+        startTop + moveEvent.clientY - startMouse.y
+      );
+      const latLng = projection.fromDivPixelToLatLng(point);
+
+      onMove(normalizePoint(latLng));
+    };
+
+    const up = () => {
+      map.setOptions({ draggable: true });
+      document.removeEventListener("mousemove", move);
+      document.removeEventListener("mouseup", up);
+    };
+
+    document.addEventListener("mousemove", move);
+    document.addEventListener("mouseup", up);
+  });
+}
+
+function getSavedCalloutPositions(id) {
+  if (!id) return null;
+
+  try {
+    const saved = JSON.parse(localStorage.getItem(CALLOUT_STORAGE_KEY) || "{}");
+    return saved[id] || null;
+  }
+  catch {
+    return null;
+  }
+}
+
+function saveCalloutPositions(id, labelPosition, targetPosition) {
+  if (!id) return;
+
+  try {
+    const saved = JSON.parse(localStorage.getItem(CALLOUT_STORAGE_KEY) || "{}");
+    saved[id] = {
+      label: labelPosition,
+      target: targetPosition
+    };
+    localStorage.setItem(CALLOUT_STORAGE_KEY, JSON.stringify(saved));
+  }
+  catch {
+    // If browser storage is unavailable, the map still remains adjustable for the current session.
+  }
+}
+
+function addCallout(labelPosition, targetPosition, html, className = "callout", id = null) {
+  const savedPositions = getSavedCalloutPositions(id);
+
+  if (savedPositions) {
+    labelPosition = savedPositions.label || labelPosition;
+    targetPosition = savedPositions.target || targetPosition;
+  }
+
+  let labelPoint = normalizePoint(labelPosition);
+  let targetPoint = normalizePoint(targetPosition);
+
+  const leader = new google.maps.Polyline({
+    path: [labelPoint, targetPoint],
     map: map,
     strokeColor: "#1f2933",
     strokeOpacity: 0.85,
@@ -501,7 +605,37 @@ function addCallout(labelPosition, targetPosition, html, className = "callout") 
     }]
   });
 
-  return addHtmlMapLabel(labelPosition, html, className);
+  const targetHandle = new google.maps.Marker({
+    position: targetPoint,
+    map: map,
+    draggable: true,
+    title: "Drag to move the arrow tip",
+    icon: {
+      path: google.maps.SymbolPath.CIRCLE,
+      scale: 5,
+      fillColor: "#1f2933",
+      fillOpacity: 0.85,
+      strokeColor: "#FFFFFF",
+      strokeOpacity: 1,
+      strokeWeight: 1.5
+    },
+    zIndex: LAYER_Z_INDEX.exhibit + 50
+  });
+
+  targetHandle.addListener("drag", event => {
+    targetPoint = normalizePoint(event.latLng);
+    leader.setPath([labelPoint, targetPoint]);
+    saveCalloutPositions(id, labelPoint, targetPoint);
+  });
+
+  return addHtmlMapLabel(labelPoint, html, className, {
+    draggable: true,
+    onPositionChanged: position => {
+      labelPoint = normalizePoint(position);
+      leader.setPath([labelPoint, targetPoint]);
+      saveCalloutPositions(id, labelPoint, targetPoint);
+    }
+  });
 }
 
 function addExhibitControls() {
@@ -526,15 +660,15 @@ function addExhibitControls() {
 }
 
 function addExhibitLabels() {
-  addCallout({ lng: -113.5685, lat: 37.0884 }, EXHIBIT_POINTS.phase3, "Phase 3<br>GWB to Crosby Way<br>Began Feb. 2026<br>Completion July 2027", "phase callout");
-  addCallout({ lng: -113.5148, lat: 37.0894 }, EXHIBIT_POINTS.phase1, "Phase 1<br>GWB corridor", "phase");
-  addCallout({ lng: -113.4746, lat: 37.0748 }, { lng: -113.4866, lat: 37.0833 }, "Phase 2<br>Opened June 2024", "phase");
-  addCallout({ lng: -113.4734, lat: 37.0998 }, EXHIBIT_POINTS.longValleyTrails, "Long Valley Trails PCD<br>Connection timing:<br>approx. 9-10 months", "callout");
-  addCallout({ lng: -113.5077, lat: 37.0577 }, EXHIBIT_POINTS.alaia, "Alaia<br>approx. 1.7 mi from<br>Washington Fields Commercial", "callout");
-  addCallout({ lng: -113.4820, lat: 37.0468 }, EXHIBIT_POINTS.ara, "ARA Southwest Logistics Center<br>Planned: approx. 5M SF<br>Completed: approx. 350K SF<br>2025-2026 construction: approx. 900K SF", "callout");
-  addCallout({ lng: -113.4750, lat: 37.0878 }, EXHIBIT_POINTS.rws, "Regional Wheel's<br>Skate Park", "small");
-  addCallout({ lng: -113.5208, lat: 37.0450 }, EXHIBIT_POINTS.airport, "SGU Airport<br>approx. 3.5 mi from<br>Washington Fields Commercial", "callout");
-  addCallout({ lng: -113.4885, lat: 37.0882 }, { lng: -113.4990, lat: 37.0805 }, "Washington Fields<br>Commercial Area", "callout");
+  addCallout({ lng: -113.5685, lat: 37.0884 }, EXHIBIT_POINTS.phase3, "Phase 3<br>GWB to Crosby Way<br>Began Feb. 2026<br>Completion July 2027", "phase callout", "phase3");
+  addCallout({ lng: -113.5148, lat: 37.0894 }, EXHIBIT_POINTS.phase1, "Phase 1<br>GWB corridor", "phase", "phase1");
+  addCallout({ lng: -113.4746, lat: 37.0748 }, { lng: -113.4866, lat: 37.0833 }, "Phase 2<br>Opened June 2024", "phase", "phase2");
+  addCallout({ lng: -113.4734, lat: 37.0998 }, EXHIBIT_POINTS.longValleyTrails, "Long Valley Trails PCD<br>Connection timing:<br>approx. 9-10 months", "callout", "longValleyTrails");
+  addCallout({ lng: -113.5077, lat: 37.0577 }, EXHIBIT_POINTS.alaia, "Alaia<br>approx. 1.7 mi from<br>Washington Fields Commercial", "callout", "alaia");
+  addCallout({ lng: -113.4820, lat: 37.0468 }, EXHIBIT_POINTS.ara, "ARA Southwest Logistics Center<br>Planned: approx. 5M SF<br>Completed: approx. 350K SF<br>2025-2026 construction: approx. 900K SF", "callout", "ara");
+  addCallout({ lng: -113.4750, lat: 37.0878 }, EXHIBIT_POINTS.rws, "Regional Wheel's<br>Skate Park", "small", "rws");
+  addCallout({ lng: -113.5208, lat: 37.0450 }, EXHIBIT_POINTS.airport, "SGU Airport<br>approx. 3.5 mi from<br>Washington Fields Commercial", "callout", "airport");
+  addCallout({ lng: -113.4885, lat: 37.0882 }, { lng: -113.4990, lat: 37.0805 }, "Washington Fields<br>Commercial Area", "callout", "washingtonFieldsCommercial");
 }
 
 function getRoadPhase(objectId) {
