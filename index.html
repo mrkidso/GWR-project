@@ -25,6 +25,30 @@ const LAYER_Z_INDEX = {
   city: 100
 };
 
+const LAND_USE_COLORS = {
+  HCOM: "#E15B5D",
+  NCOM: "#B94E4E",
+  CCOM: "#F04B4B",
+  RCOM: "#8F4A57",
+  CV: "#F4C4E4",
+  BUS: "#5BA7F2",
+  IND: "#C346F5",
+  PUD: "#B6AC96",
+  "PUD-C": "#C6764F",
+  "PUD-R": "#F4D9B4",
+  HD: "#F47C3C",
+  MHD: "#F4A0A0",
+  MD: "#FFC85A",
+  LD: "#F7F7D8",
+  VLD: "#D7FFD3",
+  EST: "#6DBD45",
+  AG: "#98C04A",
+  P: "#4D8C6F",
+  NYD: "#D9D9D9",
+  OS: "#E8F5DD",
+  DET: "#D9F4FF"
+};
+
 function getPolygonArea(coords) {
   let area = 0;
 
@@ -135,6 +159,65 @@ function getBoundsGap(first, second) {
   const latGap = Math.max(0, first.minLat - second.maxLat, second.minLat - first.maxLat);
 
   return Math.hypot(lngGap, latGap);
+}
+
+function isPointInRing(point, ring) {
+  let inside = false;
+
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [lng1, lat1] = ring[i];
+    const [lng2, lat2] = ring[j];
+    const crossesLatitude = lat1 > point.lat !== lat2 > point.lat;
+
+    if (crossesLatitude) {
+      const crossingLng = (lng2 - lng1) * (point.lat - lat1) / (lat2 - lat1) + lng1;
+      if (point.lng < crossingLng) inside = !inside;
+    }
+  }
+
+  return inside;
+}
+
+function addOpenSpaceHatch(feature) {
+  getFeatureRings(feature).forEach(ring => {
+    const bounds = getFeatureBounds({ geometry: { type: "Polygon", coordinates: [ring] } });
+    const spacing = 0.00012;
+    const sampleStep = 0.000025;
+    const minDiagonal = bounds.minLat - bounds.maxLng;
+    const maxDiagonal = bounds.maxLat - bounds.minLng;
+
+    for (let diagonal = minDiagonal; diagonal <= maxDiagonal; diagonal += spacing) {
+      let segment = [];
+
+      for (let lng = bounds.minLng; lng <= bounds.maxLng; lng += sampleStep) {
+        const point = { lng: lng, lat: lng + diagonal };
+        const insideBounds = point.lat >= bounds.minLat && point.lat <= bounds.maxLat;
+        const insideRing = insideBounds && isPointInRing(point, ring);
+
+        if (insideRing) {
+          segment.push(point);
+        }
+        else if (segment.length > 1) {
+          addHatchSegment(segment);
+          segment = [];
+        }
+      }
+
+      if (segment.length > 1) addHatchSegment(segment);
+    }
+  });
+}
+
+function addHatchSegment(path) {
+  new google.maps.Polyline({
+    path: path,
+    map: map,
+    strokeColor: "#8FB07B",
+    strokeOpacity: 0.9,
+    strokeWeight: 1,
+    clickable: false,
+    zIndex: LAYER_Z_INDEX.default + 1
+  });
 }
 
 function addMapLabel(text, center) {
@@ -268,11 +351,8 @@ labelPolygonsByField("alaia.geojson", "landusecode", {
     CCOM: 0.0000001
   }
 });
-  loadLayer("GLW_Long_Valley_trails.geojson", {
-    strokeColor: "#00FF00",
-    strokeWeight: 3,
-    fillOpacity: 0
-  });
+  loadGLWLongValleyLayer();
+  labelPolygonsByField("GLW_Long_Valley_trails.geojson", "landusecode");
 
   loadLayer("Long_Valley_trails.geojson", {
     strokeColor: "#FFA500",
@@ -359,6 +439,36 @@ function loadAlaiaLayer() {
   });
 
   layer.setMap(map);
+}
+
+function loadGLWLongValleyLayer() {
+  const layer = new google.maps.Data();
+
+  layer.loadGeoJson("GLW_Long_Valley_trails.geojson");
+
+  layer.setStyle(function(feature) {
+    const landuseCode = feature.getProperty("landusecode");
+    const color = LAND_USE_COLORS[landuseCode] || "#FFFFFF";
+
+    return {
+      strokeColor: landuseCode === "OS" ? "#8FB07B" : "#000000",
+      strokeWeight: 2,
+      strokeOpacity: 1,
+      fillColor: color,
+      fillOpacity: landuseCode === "OS" ? 0.45 : 0.65,
+      zIndex: LAYER_Z_INDEX.default
+    };
+  });
+
+  layer.setMap(map);
+
+  fetch("GLW_Long_Valley_trails.geojson")
+    .then(response => response.json())
+    .then(data => {
+      data.features
+        .filter(feature => feature.properties.landusecode === "OS")
+        .forEach(addOpenSpaceHatch);
+    });
 }
 
 function loadRoadsLayer() {
