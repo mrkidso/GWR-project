@@ -495,7 +495,8 @@ function loadLayer(fileName, styleOptions) {
     strokeWeight: styleOptions.strokeWeight || 3,
     fillColor: styleOptions.fillColor || styleOptions.strokeColor || "#FFFFFF",
     fillOpacity: styleOptions.fillOpacity ?? 0,
-    zIndex: styleOptions.zIndex ?? LAYER_Z_INDEX.default
+    zIndex: styleOptions.zIndex ?? LAYER_Z_INDEX.default,
+    clickable: styleOptions.clickable ?? false
   };
 
   layer.setStyle(style);
@@ -541,7 +542,8 @@ function loadAlaiaLayer() {
       strokeOpacity: 1,
       fillColor: fillColor,
       fillOpacity: 0.65,
-      zIndex: LAYER_Z_INDEX.default
+      zIndex: LAYER_Z_INDEX.default,
+      clickable: false
     };
   });
 
@@ -563,7 +565,8 @@ function loadGLWLongValleyLayer() {
       strokeOpacity: 1,
       fillColor: color,
       fillOpacity: landuseCode === "OS" ? 0.45 : 0.65,
-      zIndex: LAYER_Z_INDEX.default
+      zIndex: LAYER_Z_INDEX.default,
+      clickable: false
     };
   });
 
@@ -631,21 +634,25 @@ function loadRoadsLayer() {
   layer.setMap(map);
 
   layer.addListener("click", function(event) {
-    const objectId = event.feature.getProperty("objectid");
-    const globalId = event.feature.getProperty("globalid");
-    const surfaceType = event.feature.getProperty("surftype") || "Unknown";
-
-    roadsInfoWindow.setContent(`
-      <div style="font-family: Arial, sans-serif; font-size: 12px; line-height: 1.4;">
-        <strong>Road Feature</strong><br>
-        Object ID: ${objectId}<br>
-        Global ID: ${globalId}<br>
-        Surface: ${surfaceType}
-      </div>
-    `);
-    roadsInfoWindow.setPosition(event.latLng);
-    roadsInfoWindow.open(map);
+    showRoadPopup(event.feature, event.latLng);
   });
+}
+
+function showRoadPopup(feature, position) {
+  const objectId = feature.getProperty("objectid");
+  const globalId = feature.getProperty("globalid");
+  const surfaceType = feature.getProperty("surftype") || "Unknown";
+
+  roadsInfoWindow.setContent(`
+    <div style="font-family: Arial, sans-serif; font-size: 12px; line-height: 1.4;">
+      <strong>Road Feature</strong><br>
+      Object ID: ${objectId}<br>
+      Global ID: ${globalId}<br>
+      Surface: ${surfaceType}
+    </div>
+  `);
+  roadsInfoWindow.setPosition(position);
+  roadsInfoWindow.open(map);
 }
 
 function loadCommercialLayer() {
@@ -663,7 +670,8 @@ function loadCommercialLayer() {
       strokeOpacity: 1,
       fillColor: color,
       fillOpacity: 0.55,
-      zIndex: LAYER_Z_INDEX.default
+      zIndex: LAYER_Z_INDEX.default,
+      clickable: false
     };
   });
 
@@ -687,7 +695,8 @@ function loadFutureGWB() {
       strokeWeight: 5,
       fillColor: feature.getProperty("gwbColor") || "#E60000",
       fillOpacity: 0.55,
-      zIndex: LAYER_Z_INDEX.default
+      zIndex: LAYER_Z_INDEX.default,
+      clickable: false
     };
   });
 
