@@ -37,77 +37,197 @@ function getPolygonArea(coords) {
   return Math.abs(area / 2);
 }
 
-function getFeatureLabelArea(feature) {
-  if (!feature.geometry) return 0;
+function getPolygonCenter(coords) {
+  let area = 0;
+  let lngSum = 0;
+  let latSum = 0;
+
+  for (let i = 0, j = coords.length - 1; i < coords.length; j = i++) {
+    const [lng1, lat1] = coords[j];
+    const [lng2, lat2] = coords[i];
+    const cross = lng1 * lat2 - lng2 * lat1;
+
+    area += cross;
+    lngSum += (lng1 + lng2) * cross;
+    latSum += (lat1 + lat2) * cross;
+  }
+
+  if (area === 0) {
+    const center = coords.reduce((total, coord) => {
+      total.lng += coord[0];
+      total.lat += coord[1];
+      return total;
+    }, { lng: 0, lat: 0 });
+
+    return {
+      lng: center.lng / coords.length,
+      lat: center.lat / coords.length,
+      area: 0
+    };
+  }
+
+  return {
+    lng: lngSum / (3 * area),
+    lat: latSum / (3 * area),
+    area: Math.abs(area / 2)
+  };
+}
+
+function getFeatureRings(feature) {
+  if (!feature.geometry) return [];
 
   if (feature.geometry.type === "Polygon") {
-    return getPolygonArea(feature.geometry.coordinates[0]);
+    return [feature.geometry.coordinates[0]];
   }
 
   if (feature.geometry.type === "MultiPolygon") {
-    return feature.geometry.coordinates.reduce((total, polygon) => {
-      return total + getPolygonArea(polygon[0]);
-    }, 0);
+    return feature.geometry.coordinates.map(polygon => polygon[0]);
   }
 
-  return 0;
+  return [];
+}
+
+function getFeatureLabelArea(feature) {
+  return getFeatureRings(feature).reduce((total, coords) => {
+    return total + getPolygonArea(coords);
+  }, 0);
+}
+
+function getFeatureLabelCenter(feature) {
+  const centers = getFeatureRings(feature).map(getPolygonCenter);
+  const totalArea = centers.reduce((total, center) => total + center.area, 0);
+
+  if (totalArea > 0) {
+    return centers.reduce((total, center) => {
+      total.lng += center.lng * center.area / totalArea;
+      total.lat += center.lat * center.area / totalArea;
+      return total;
+    }, { lng: 0, lat: 0 });
+  }
+
+  return centers.reduce((total, center) => {
+    total.lng += center.lng / centers.length;
+    total.lat += center.lat / centers.length;
+    return total;
+  }, { lng: 0, lat: 0 });
+}
+
+function getFeatureBounds(feature) {
+  return getFeatureRings(feature).flat().reduce((bounds, coord) => {
+    const [lng, lat] = coord;
+
+    return {
+      minLng: Math.min(bounds.minLng, lng),
+      minLat: Math.min(bounds.minLat, lat),
+      maxLng: Math.max(bounds.maxLng, lng),
+      maxLat: Math.max(bounds.maxLat, lat)
+    };
+  }, {
+    minLng: Infinity,
+    minLat: Infinity,
+    maxLng: -Infinity,
+    maxLat: -Infinity
+  });
+}
+
+function getBoundsGap(first, second) {
+  const lngGap = Math.max(0, first.minLng - second.maxLng, second.minLng - first.maxLng);
+  const latGap = Math.max(0, first.minLat - second.maxLat, second.minLat - first.maxLat);
+
+  return Math.hypot(lngGap, latGap);
+}
+
+function addMapLabel(text, center) {
+  new google.maps.Marker({
+    position: center,
+    map: map,
+    icon: {
+      path: google.maps.SymbolPath.CIRCLE,
+      scale: 0
+    },
+    label: {
+      text: text,
+      color: "#000000",
+      fontSize: "12px",
+      fontWeight: "bold"
+    }
+  });
+}
+
+function shouldLabelFeature(feature, fieldName, options) {
+  const labelText = String(feature.properties[fieldName] || "");
+  const minArea = options.minAreaByLabel?.[labelText];
+
+  if (!labelText) return false;
+  if (getFeatureRings(feature).length === 0) return false;
+  if (minArea && getFeatureLabelArea(feature) < minArea) return false;
+
+  return true;
+}
+
+function labelGroupedPolygons(features, fieldName, options) {
+  const maxGroupGap = options.maxGroupGap ?? 0.0003;
+  const labelFeatures = features
+    .filter(feature => shouldLabelFeature(feature, fieldName, options))
+    .map((feature, index) => ({
+      feature: feature,
+      index: index,
+      labelText: String(feature.properties[fieldName] || ""),
+      bounds: getFeatureBounds(feature),
+      center: getFeatureLabelCenter(feature),
+      area: getFeatureLabelArea(feature)
+    }));
+
+  const parents = labelFeatures.map((_, index) => index);
+  const find = index => parents[index] === index ? index : parents[index] = find(parents[index]);
+  const union = (first, second) => parents[find(second)] = find(first);
+
+  for (let i = 0; i < labelFeatures.length; i++) {
+    for (let j = i + 1; j < labelFeatures.length; j++) {
+      if (labelFeatures[i].labelText !== labelFeatures[j].labelText) continue;
+      if (getBoundsGap(labelFeatures[i].bounds, labelFeatures[j].bounds) <= maxGroupGap) {
+        union(i, j);
+      }
+    }
+  }
+
+  const groups = new Map();
+
+  labelFeatures.forEach((item, index) => {
+    const groupId = find(index);
+    const group = groups.get(groupId) || {
+      labelText: item.labelText,
+      totalArea: 0,
+      lng: 0,
+      lat: 0
+    };
+
+    group.totalArea += item.area;
+    group.lng += item.center.lng * item.area;
+    group.lat += item.center.lat * item.area;
+    groups.set(groupId, group);
+  });
+
+  groups.forEach(group => {
+    addMapLabel(group.labelText, {
+      lng: group.lng / group.totalArea,
+      lat: group.lat / group.totalArea
+    });
+  });
 }
 
 function labelPolygonsByField(fileName, fieldName, options = {}) {
-
   fetch(fileName)
     .then(response => response.json())
     .then(data => {
+      if (options.groupNearbyByLabel) {
+        labelGroupedPolygons(data.features, fieldName, options);
+        return;
+      }
 
       data.features.forEach(feature => {
-
-        if (!feature.geometry) return;
-
-        const labelText = String(feature.properties[fieldName] || "");
-        const minArea = options.minAreaByLabel?.[labelText];
-
-        if (minArea && getFeatureLabelArea(feature) < minArea) return;
-
-        let coords;
-
-        if (feature.geometry.type === "Polygon") {
-          coords = feature.geometry.coordinates[0];
-        }
-        else if (feature.geometry.type === "MultiPolygon") {
-          coords = feature.geometry.coordinates[0][0];
-        }
-        else {
-          return;
-        }
-
-        let latSum = 0;
-        let lngSum = 0;
-
-        coords.forEach(coord => {
-          lngSum += coord[0];
-          latSum += coord[1];
-        });
-
-        const center = {
-          lat: latSum / coords.length,
-          lng: lngSum / coords.length
-        };
-
-        new google.maps.Marker({
-          position: center,
-          map: map,
-          icon: {
-            path: google.maps.SymbolPath.CIRCLE,
-            scale: 0
-          },
-          label: {
-            text: labelText,
-            color: "#000000",
-            fontSize: "12px",
-            fontWeight: "bold"
-          }
-        });
-
+        if (!shouldLabelFeature(feature, fieldName, options)) return;
+        addMapLabel(String(feature.properties[fieldName] || ""), getFeatureLabelCenter(feature));
       });
 
     });
@@ -167,7 +287,10 @@ labelPolygonsByField("alaia.geojson", "landusecode", {
   });
 
   loadCommercialLayer();
-  labelPolygonsByField("commercial.geojson", "landusecode");
+  labelPolygonsByField("commercial.geojson", "landusecode", {
+    groupNearbyByLabel: true,
+    maxGroupGap: 0.0003
+  });
 
   loadFutureGWB();
 
