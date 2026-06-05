@@ -547,6 +547,11 @@ const EXHIBIT_POINTS = {
   phase3: { lng: -113.5627, lat: 37.0850 }
 };
 
+const ROUTE_MILES = {};
+const MILEAGE_ORIGIN_ID = "washingtonFieldsCommercial";
+const MILEAGE_DESTINATION_IDS = ["phase3", "longValleyTrails", "rws", "alaia", "ara", "airport"];
+
+
 const CALLOUT_STORAGE_KEY = "gwrExhibitCallouts";
 const FURNITURE_STORAGE_KEY = "gwrExhibitFurniture";
 const IS_PRINT_VIEW = new URLSearchParams(window.location.search).get("print") === "1";
@@ -1140,6 +1145,7 @@ function addHtmlMapLabel(position, html, className = "", options = {}) {
     div = document.createElement("div");
     div.className = `map-label ${className} ${options.draggable ? "adjustable" : ""}`.trim();
     div.innerHTML = html;
+    if (options.calloutId) div.dataset.calloutId = options.calloutId;
     div.style.setProperty("--label-scale", labelScale);
     div.title = options.draggable ? "Drag to move this label" : "";
 
@@ -1368,7 +1374,8 @@ function addCallout(labelPosition, targetPosition, html, className = "callout", 
     },
     onScaleChanged: scale => {
       saveCalloutScale(id, scale);
-    }
+    },
+    calloutId: id
   });
 }
 
@@ -1442,80 +1449,22 @@ function addExhibitControls() {
   `, "map-control legend-control");
 }
 
+function formatMileage(destinationId) {
+  const miles = ROUTE_MILES[destinationId];
+  if (typeof miles !== "number" || !Number.isFinite(miles)) return "Approx. mileage pending";
+  return `Approx. ${miles.toFixed(1)} mi from<br>Washington Fields Commercial<br>Area`;
+}
+
 function addExhibitLabels() {
-  // Mileage notes use Washington Fields Commercial Area as the origin.
-  // These are approximate corridor/travel distances intended for the exhibit callouts.
-  addCallout(
-    { lng: -113.5685, lat: 37.0884 },
-    EXHIBIT_POINTS.phase3,
-    "Phase 3 / Crosby Way<br>Approx. 5.6 mi west of<br>Washington Fields Commercial Area<br>Began Feb. 2026<br>Completion July 2027",
-    "phase callout",
-    "phase3"
-  );
-
-  addCallout(
-    { lng: -113.5148, lat: 37.0894 },
-    EXHIBIT_POINTS.phase1,
-    "Phase 1<br>GWB corridor",
-    "phase",
-    "phase1"
-  );
-
-  addCallout(
-    { lng: -113.4746, lat: 37.0748 },
-    { lng: -113.4866, lat: 37.0833 },
-    "Phase 2<br>Opened June 2024",
-    "phase",
-    "phase2"
-  );
-
-  addCallout(
-    { lng: -113.4734, lat: 37.0998 },
-    EXHIBIT_POINTS.longValleyTrails,
-    "Long Valley Trails PCD<br>Approx. 0.8 mi from<br>Washington Fields Commercial Area<br>Connection timing:<br>approx. 9-10 months",
-    "callout",
-    "longValleyTrails"
-  );
-
-  addCallout(
-    { lng: -113.5077, lat: 37.0577 },
-    EXHIBIT_POINTS.alaia,
-    "Alaia PCD<br>Approx. 1.7 mi from<br>Washington Fields Commercial Area",
-    "callout",
-    "alaia"
-  );
-
-  addCallout(
-    { lng: -113.4820, lat: 37.0468 },
-    EXHIBIT_POINTS.ara,
-    "ARA Southwest Logistics Center<br>Approx. 2.3 mi from<br>Washington Fields Commercial Area<br>Planned: approx. 5M SF<br>Completed: approx. 350K SF<br>2025-2026 construction: approx. 900K SF",
-    "callout",
-    "ara"
-  );
-
-  addCallout(
-    { lng: -113.4750, lat: 37.0878 },
-    EXHIBIT_POINTS.rws,
-    "Regional Wheel's<br>Skate Park<br>Approx. 1.2 mi from<br>Washington Fields Commercial Area",
-    "small",
-    "rws"
-  );
-
-  addCallout(
-    { lng: -113.5208, lat: 37.0450 },
-    EXHIBIT_POINTS.airport,
-    "SGU Airport<br>Approx. 3.5 mi from<br>Washington Fields Commercial Area",
-    "callout",
-    "airport"
-  );
-
-  addCallout(
-    { lng: -113.4885, lat: 37.0882 },
-    { lng: -113.4990, lat: 37.0805 },
-    "Washington Fields<br>Commercial Area<br><em>Origin for approximate mileages</em>",
-    "callout",
-    "washingtonFieldsCommercial"
-  );
+  addCallout({ lng: -113.5685, lat: 37.0884 }, EXHIBIT_POINTS.phase3, `Phase 3 / Crosby Way<br>${formatMileage("phase3")}<br>Began Feb. 2026<br>Completion July 2027`, "phase callout", "phase3");
+  addCallout({ lng: -113.5148, lat: 37.0894 }, EXHIBIT_POINTS.phase1, "Phase 1<br>GWB corridor", "phase", "phase1");
+  addCallout({ lng: -113.4746, lat: 37.0748 }, { lng: -113.4866, lat: 37.0833 }, "Phase 2<br>Opened June 2024", "phase", "phase2");
+  addCallout({ lng: -113.4734, lat: 37.0998 }, EXHIBIT_POINTS.longValleyTrails, `Long Valley Trails PCD<br>${formatMileage("longValleyTrails")}<br>Connection timing:<br>approx. 9-10 months`, "callout", "longValleyTrails");
+  addCallout({ lng: -113.5077, lat: 37.0577 }, EXHIBIT_POINTS.alaia, `Alaia PCD<br>${formatMileage("alaia")}`, "callout", "alaia");
+  addCallout({ lng: -113.4820, lat: 37.0468 }, EXHIBIT_POINTS.ara, `ARA Southwest Logistics Center<br>${formatMileage("ara")}<br>Planned: approx. 5M SF<br>Completed: approx. 350K SF<br>2025-2026 construction: approx. 900K SF`, "callout", "ara");
+  addCallout({ lng: -113.4750, lat: 37.0878 }, EXHIBIT_POINTS.rws, `Regional Wheel's<br>Skate Park<br>${formatMileage("rws")}`, "small", "rws");
+  addCallout({ lng: -113.5208, lat: 37.0450 }, EXHIBIT_POINTS.airport, `SGU Airport<br>${formatMileage("airport")}`, "callout", "airport");
+  addCallout({ lng: -113.4885, lat: 37.0882 }, { lng: -113.4990, lat: 37.0805 }, "Washington Fields<br>Commercial Area<br><em>Origin for approximate mileages</em>", "callout", "washingtonFieldsCommercial");
 }
 
 function getRoadPhase(objectId) {
@@ -1632,11 +1581,165 @@ function addRoadWidthMeasurements() {
     });
 }
 
+
+function getCalloutTargetPoint(calloutId) {
+  const saved = getSavedCalloutPositions(calloutId);
+  return saved?.target || EXHIBIT_POINTS[calloutId] || null;
+}
+
+function toRadians(degrees) {
+  return degrees * Math.PI / 180;
+}
+
+function distanceMiles(first, second) {
+  const earthRadiusMiles = 3958.7613;
+  const dLat = toRadians(second.lat - first.lat);
+  const dLng = toRadians(second.lng - first.lng);
+  const lat1 = toRadians(first.lat);
+  const lat2 = toRadians(second.lat);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return 2 * earthRadiusMiles * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function isAsphaltRoadFeature(feature) {
+  const surfaceType = String(feature.properties?.surftype || "").trim().toLowerCase();
+  return surfaceType === "asphalt";
+}
+
+function pointToFeatureDistanceMiles(point, feature) {
+  let best = Infinity;
+
+  getFeatureRings(feature).forEach(ring => {
+    ring.forEach(coord => {
+      best = Math.min(best, distanceMiles(point, { lng: coord[0], lat: coord[1] }));
+    });
+  });
+
+  const center = getFeatureLabelCenter(feature);
+  if (center && Number.isFinite(center.lng) && Number.isFinite(center.lat)) {
+    best = Math.min(best, distanceMiles(point, center));
+  }
+
+  return best;
+}
+
+function buildAsphaltRoadNetwork(features) {
+  const roadItems = features
+    .filter(isAsphaltRoadFeature)
+    .map((feature, index) => ({
+      index,
+      feature,
+      center: getFeatureLabelCenter(feature),
+      bounds: getFeatureBounds(feature),
+      edges: []
+    }))
+    .filter(item => Number.isFinite(item.center.lng) && Number.isFinite(item.center.lat));
+
+  const connectToleranceMiles = 0.035; // about 185 feet; enough to bridge tiny digitizing gaps at intersections.
+
+  for (let i = 0; i < roadItems.length; i++) {
+    for (let j = i + 1; j < roadItems.length; j++) {
+      const gapDegrees = getBoundsGap(roadItems[i].bounds, roadItems[j].bounds);
+      if (gapDegrees > 0.00055) continue;
+
+      const centerDistance = distanceMiles(roadItems[i].center, roadItems[j].center);
+      const nearestDistance = Math.min(
+        pointToFeatureDistanceMiles(roadItems[i].center, roadItems[j].feature),
+        pointToFeatureDistanceMiles(roadItems[j].center, roadItems[i].feature),
+        centerDistance
+      );
+
+      if (nearestDistance <= connectToleranceMiles || gapDegrees === 0) {
+        roadItems[i].edges.push({ to: j, weight: centerDistance });
+        roadItems[j].edges.push({ to: i, weight: centerDistance });
+      }
+    }
+  }
+
+  return roadItems;
+}
+
+function findNearestRoadNode(point, roadItems) {
+  let bestIndex = -1;
+  let bestDistance = Infinity;
+
+  roadItems.forEach((item, index) => {
+    const distance = pointToFeatureDistanceMiles(point, item.feature);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestIndex = index;
+    }
+  });
+
+  return { index: bestIndex, distance: bestDistance };
+}
+
+function shortestRoadDistance(startPoint, endPoint, roadItems) {
+  const start = findNearestRoadNode(startPoint, roadItems);
+  const end = findNearestRoadNode(endPoint, roadItems);
+  if (start.index < 0 || end.index < 0) return null;
+
+  const distances = new Array(roadItems.length).fill(Infinity);
+  const visited = new Array(roadItems.length).fill(false);
+  distances[start.index] = start.distance;
+
+  for (let count = 0; count < roadItems.length; count++) {
+    let current = -1;
+    let currentDistance = Infinity;
+
+    for (let i = 0; i < roadItems.length; i++) {
+      if (!visited[i] && distances[i] < currentDistance) {
+        current = i;
+        currentDistance = distances[i];
+      }
+    }
+
+    if (current === -1) break;
+    if (current === end.index) break;
+
+    visited[current] = true;
+
+    roadItems[current].edges.forEach(edge => {
+      const nextDistance = distances[current] + edge.weight;
+      if (nextDistance < distances[edge.to]) distances[edge.to] = nextDistance;
+    });
+  }
+
+  const routeDistance = distances[end.index] + end.distance;
+  return Number.isFinite(routeDistance) ? routeDistance : null;
+}
+
+function calculateRouteMileages() {
+  return fetch("roads.geojson")
+    .then(response => response.json())
+    .then(data => {
+      const roadItems = buildAsphaltRoadNetwork(data.features || []);
+      const origin = getCalloutTargetPoint(MILEAGE_ORIGIN_ID);
+      if (!origin || roadItems.length === 0) return;
+
+      MILEAGE_DESTINATION_IDS.forEach(destinationId => {
+        const destination = getCalloutTargetPoint(destinationId);
+        if (!destination) return;
+
+        const miles = shortestRoadDistance(origin, destination, roadItems);
+        if (typeof miles === "number" && Number.isFinite(miles)) {
+          ROUTE_MILES[destinationId] = miles;
+        }
+      });
+    });
+}
+
 function loadExhibitAnnotations() {
   fitMapToBoundingBox();
   addExhibitControls();
-  addExhibitLabels();
-  addRoadWidthMeasurements();
+  calculateRouteMileages()
+    .catch(error => {
+      console.warn("Could not calculate route mileages. Falling back to pending labels.", error);
+    })
+    .finally(() => {
+      addExhibitLabels();
+      addRoadWidthMeasurements();
+    });
 }
 
 function addMapLabel(text, center) {
