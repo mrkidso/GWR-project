@@ -268,14 +268,15 @@
     }
 
     body.print-view .print-page {
-      background: #ffffff;
+      background: transparent;
       display: block;
       height: 11in;
       left: 0;
+      pointer-events: none;
       position: absolute;
       top: 0;
       width: 17in;
-      z-index: 0;
+      z-index: 30000;
     }
 
     body.print-view #map {
@@ -287,6 +288,14 @@
       z-index: 1;
     }
 
+    body.print-view .legend-control {
+      transform: translate(-50%, -50%) scale(var(--label-scale, 1));
+    }
+
+    body.print-view .scale-bar-art {
+      transform: rotate(0deg);
+    }
+
     .frame-border {
       border: 2px solid #111111;
       box-sizing: border-box;
@@ -296,66 +305,110 @@
       position: absolute;
       top: 0.25in;
       width: 16.5in;
-      z-index: 5;
+      z-index: 2;
     }
 
     .frame-title-panel {
       background: #ffffff;
+      border-bottom: 2px solid #111111;
       border-left: 2px solid #111111;
+      border-right: 2px solid #111111;
+      border-top: 2px solid #111111;
       box-sizing: border-box;
       height: 10.5in;
       left: 16.25in;
       position: absolute;
       top: 0.25in;
       width: 0.5in;
-      z-index: 6;
+      z-index: 3;
+    }
+
+    .frame-panel-divider {
+      border-top: 1px solid #111111;
+      bottom: 2.95in;
+      left: 0;
+      position: absolute;
+      width: 0.5in;
     }
 
     .frame-title,
     .frame-date,
-    .frame-gis,
-    .frame-logo {
+    .frame-gis {
       color: #111111;
       font-family: "Times New Roman", serif;
       position: absolute;
       text-align: center;
-      writing-mode: vertical-rl;
+      transform: rotate(90deg);
+      transform-origin: center;
     }
 
     .frame-title {
-      font-size: 13px;
+      font-size: 14px;
       font-weight: 700;
-      height: 4.9in;
-      left: 0.07in;
-      line-height: 1.05;
-      top: 2.8in;
+      height: 0.35in;
+      left: -2.23in;
+      letter-spacing: 0.01em;
+      line-height: 0.35in;
+      top: 4.9in;
+      width: 4.9in;
     }
 
     .frame-date {
       font-size: 6px;
-      height: 1.15in;
-      left: 0.23in;
-      top: 0.12in;
+      height: 0.16in;
+      left: -0.49in;
+      line-height: 1.05;
+      top: 0.56in;
+      width: 1.22in;
     }
 
     .frame-gis {
-      border-top: 1px solid #111111;
-      bottom: 1.65in;
+      border-bottom: 1px solid #111111;
       font-size: 8px;
-      height: 1.1in;
-      left: 0;
+      height: 0.42in;
+      left: -0.55in;
       line-height: 1.1;
-      padding-top: 0.06in;
-      width: 0.5in;
+      padding-bottom: 0.03in;
+      top: 7.24in;
+      width: 1.6in;
     }
 
     .frame-logo {
-      bottom: 0.15in;
+      align-items: center;
+      bottom: 0.12in;
+      color: #111111;
+      display: flex;
+      flex-direction: column;
+      font-family: "Times New Roman", serif;
+      gap: 0.03in;
+      height: 1.3in;
+      justify-content: center;
+      left: 0;
+      position: absolute;
+      width: 0.5in;
+    }
+
+    .frame-logo-mark {
+      height: 0.23in;
+      width: 0.23in;
+    }
+
+    .frame-logo-text {
       font-size: 18px;
       font-weight: 700;
-      height: 1.2in;
-      left: 0.05in;
+      line-height: 0.9;
+      transform: rotate(90deg);
+      transform-origin: center;
+      white-space: nowrap;
+    }
+
+    .frame-logo-small {
+      font-size: 6px;
       line-height: 1;
+      margin-top: 0.2in;
+      transform: rotate(90deg);
+      transform-origin: center;
+      white-space: nowrap;
     }
 
     @page {
@@ -386,8 +439,17 @@ if (new URLSearchParams(window.location.search).get("print") === "1") {
   <div class="frame-title-panel">
     <div class="frame-date" id="frameDate"></div>
     <div class="frame-title">George Washington Road Corridor Exhibit</div>
+    <div class="frame-panel-divider"></div>
     <div class="frame-gis">Washington City GIS<br>Washington County, Utah<br>435-656-6300</div>
-    <div class="frame-logo">Washington City</div>
+    <div class="frame-logo">
+      <svg class="frame-logo-mark" viewBox="0 0 48 48" aria-hidden="true">
+        <circle cx="24" cy="24" r="20" fill="none" stroke="#111111" stroke-width="3"></circle>
+        <path d="M10 28 L19 16 L25 25 L30 18 L39 31" fill="none" stroke="#111111" stroke-width="3" stroke-linejoin="round"></path>
+        <path d="M16 34 C22 29 29 29 36 34" fill="none" stroke="#111111" stroke-width="3" stroke-linecap="round"></path>
+      </svg>
+      <div class="frame-logo-text">Washington<br>City</div>
+      <div class="frame-logo-small">Community &amp; Beauty</div>
+    </div>
   </div>
 </div>
 <div id="map"></div>
