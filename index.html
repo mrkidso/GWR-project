@@ -11,6 +11,31 @@
       padding: 0;
     }
 
+    .export-frame-button {
+      background: #ffffff;
+      border: 1px solid rgba(31, 41, 51, 0.35);
+      border-radius: 4px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
+      color: #1f2933;
+      cursor: pointer;
+      font-family: Arial, sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      left: 12px;
+      padding: 9px 12px;
+      position: fixed;
+      top: 12px;
+      z-index: 20000;
+    }
+
+    .export-frame-button:hover {
+      background: #f3f6f8;
+    }
+
+    .print-page {
+      display: none;
+    }
+
     .map-label {
       position: absolute;
       transform: translate(-50%, -50%);
@@ -230,9 +255,141 @@
         repeating-linear-gradient(135deg, rgba(143, 176, 123, 0.95) 0 1px, transparent 1px 4px),
         #E8F5DD;
     }
+
+    body.print-view {
+      background: #f2f2f2;
+      height: 11in;
+      overflow: auto;
+      width: 17in;
+    }
+
+    body.print-view .export-frame-button {
+      display: none;
+    }
+
+    body.print-view .print-page {
+      background: #ffffff;
+      display: block;
+      height: 11in;
+      left: 0;
+      position: absolute;
+      top: 0;
+      width: 17in;
+      z-index: 0;
+    }
+
+    body.print-view #map {
+      height: 10.5in;
+      left: 0.25in;
+      position: absolute;
+      top: 0.25in;
+      width: 16in;
+      z-index: 1;
+    }
+
+    .frame-border {
+      border: 2px solid #111111;
+      box-sizing: border-box;
+      height: 10.5in;
+      left: 0.25in;
+      pointer-events: none;
+      position: absolute;
+      top: 0.25in;
+      width: 16.5in;
+      z-index: 5;
+    }
+
+    .frame-title-panel {
+      background: #ffffff;
+      border-left: 2px solid #111111;
+      box-sizing: border-box;
+      height: 10.5in;
+      left: 16.25in;
+      position: absolute;
+      top: 0.25in;
+      width: 0.5in;
+      z-index: 6;
+    }
+
+    .frame-title,
+    .frame-date,
+    .frame-gis,
+    .frame-logo {
+      color: #111111;
+      font-family: "Times New Roman", serif;
+      position: absolute;
+      text-align: center;
+      writing-mode: vertical-rl;
+    }
+
+    .frame-title {
+      font-size: 13px;
+      font-weight: 700;
+      height: 4.9in;
+      left: 0.07in;
+      line-height: 1.05;
+      top: 2.8in;
+    }
+
+    .frame-date {
+      font-size: 6px;
+      height: 1.15in;
+      left: 0.23in;
+      top: 0.12in;
+    }
+
+    .frame-gis {
+      border-top: 1px solid #111111;
+      bottom: 1.65in;
+      font-size: 8px;
+      height: 1.1in;
+      left: 0;
+      line-height: 1.1;
+      padding-top: 0.06in;
+      width: 0.5in;
+    }
+
+    .frame-logo {
+      bottom: 0.15in;
+      font-size: 18px;
+      font-weight: 700;
+      height: 1.2in;
+      left: 0.05in;
+      line-height: 1;
+    }
+
+    @page {
+      margin: 0;
+      size: 17in 11in;
+    }
+
+    @media print {
+      html,
+      body.print-view {
+        background: #ffffff;
+        height: 11in;
+        overflow: hidden;
+        width: 17in;
+      }
+    }
   </style>
 </head>
 <body>
+<script>
+if (new URLSearchParams(window.location.search).get("print") === "1") {
+  document.body.classList.add("print-view");
+}
+</script>
+<button class="export-frame-button" type="button" onclick="openFrameExport()">Export map to frame</button>
+<div class="print-page" aria-hidden="true">
+  <div class="frame-border"></div>
+  <div class="frame-title-panel">
+    <div class="frame-date" id="frameDate"></div>
+    <div class="frame-title">George Washington Road Corridor Exhibit</div>
+    <div class="frame-gis">Washington City GIS<br>Washington County, Utah<br>435-656-6300</div>
+    <div class="frame-logo">Washington City</div>
+  </div>
+</div>
 <div id="map"></div>
 
 <script>
@@ -267,6 +424,7 @@ const EXHIBIT_POINTS = {
 
 const CALLOUT_STORAGE_KEY = "gwrExhibitCallouts";
 const FURNITURE_STORAGE_KEY = "gwrExhibitFurniture";
+const IS_PRINT_VIEW = new URLSearchParams(window.location.search).get("print") === "1";
 
 const LAND_USE_COLORS = {
   HCOM: "#E15B5D",
@@ -578,6 +736,25 @@ function fitMapToBoundingBox() {
     });
 }
 
+function openFrameExport() {
+  const printUrl = new URL(window.location.href);
+  printUrl.searchParams.set("print", "1");
+  window.open(printUrl.toString(), "_blank", "noopener,noreferrer");
+}
+
+function setPrintFrameDate() {
+  const dateElement = document.getElementById("frameDate");
+  if (!dateElement) return;
+
+  const currentDate = new Date().toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "long",
+    day: "numeric"
+  });
+
+  dateElement.innerHTML = `Map Created:<br>${currentDate}`;
+}
+
 function normalizePoint(position) {
   if (typeof position.lat === "function") {
     return {
@@ -626,6 +803,8 @@ function addHtmlMapLabel(position, html, className = "", options = {}) {
 
   overlay.draw = function() {
     const projection = this.getProjection();
+    if (!projection) return;
+
     const point = projection.fromLatLngToDivPixel(new google.maps.LatLng(labelPosition.lat, labelPosition.lng));
 
     if (!point || !div) return;
@@ -1136,9 +1315,16 @@ function initMap() {
     center: { lat: 37.13, lng: -113.48 },
     zoom: 13,
     mapTypeId: "satellite",
-    disableDefaultUI: false,
+    disableDefaultUI: IS_PRINT_VIEW,
+    clickableIcons: !IS_PRINT_VIEW,
+    gestureHandling: IS_PRINT_VIEW ? "none" : "auto",
     tilt: 0
   });
+
+  if (IS_PRINT_VIEW) {
+    setPrintFrameDate();
+  }
+
   roadsInfoWindow = new google.maps.InfoWindow();
   map.addListener("click", clearRoadSelection);
 
@@ -1181,11 +1367,13 @@ labelPolygonsByField("alaia.geojson", "landusecode", {
     fillOpacity: 0
   });
 
-  loadLayer("bounding Box.geojson", {
-    strokeColor: "#FFFFFF",
-    strokeWeight: 3,
-    fillOpacity: 0
-  });
+  if (!IS_PRINT_VIEW) {
+    loadLayer("bounding Box.geojson", {
+      strokeColor: "#FFFFFF",
+      strokeWeight: 3,
+      fillOpacity: 0
+    });
+  }
 
   loadCommercialLayer();
   labelPolygonsByField("commercial.geojson", "landusecode", {
