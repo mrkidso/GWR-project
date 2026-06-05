@@ -848,17 +848,58 @@ function getGeoJsonBounds(data) {
 }
 
 function fitMapToBoundingBox() {
+  // Unlike fitBounds(), this keeps the visible map viewport INSIDE the
+  // bounding Box.geojson extent. That means the exported frame will not
+  // show imagery or features beyond the bounding box, even if some map
+  // content gets cut off at the frame edges.
   fetch("bounding Box.geojson")
     .then(response => response.json())
     .then(data => {
       const bounds = getGeoJsonBounds(data);
-      map.fitBounds({
-        north: bounds.maxLat,
-        south: bounds.minLat,
-        east: bounds.maxLng,
-        west: bounds.minLng
-      });
+      setMapViewportInsideBounds(bounds);
     });
+}
+
+function latToMercatorY(lat) {
+  const sinLat = Math.sin(lat * Math.PI / 180);
+  return 0.5 - Math.log((1 + sinLat) / (1 - sinLat)) / (4 * Math.PI);
+}
+
+function mercatorYToLat(y) {
+  return 180 / Math.PI * Math.atan(Math.sinh(Math.PI * (1 - 2 * y)));
+}
+
+function setMapViewportInsideBounds(bounds) {
+  const mapDiv = map.getDiv();
+  const widthPx = mapDiv.clientWidth || window.innerWidth;
+  const heightPx = mapDiv.clientHeight || window.innerHeight;
+
+  const west = bounds.minLng;
+  const east = bounds.maxLng;
+  const south = bounds.minLat;
+  const north = bounds.maxLat;
+
+  const lngSpan = Math.abs(east - west);
+  const yNorth = latToMercatorY(north);
+  const ySouth = latToMercatorY(south);
+  const ySpan = Math.abs(ySouth - yNorth);
+
+  const lngFraction = lngSpan / 360;
+  const latFraction = ySpan;
+
+  const zoomForWidth = Math.log2(widthPx / (256 * lngFraction));
+  const zoomForHeight = Math.log2(heightPx / (256 * latFraction));
+
+  // Use the larger zoom so both the viewport width and height fit within
+  // the bbox. A tiny bump protects against sub-pixel rounding showing slivers
+  // outside the requested extent.
+  const targetZoom = Math.max(0, Math.max(zoomForWidth, zoomForHeight) + 0.02);
+
+  const centerLng = (west + east) / 2;
+  const centerLat = mercatorYToLat((yNorth + ySouth) / 2);
+
+  map.setCenter({ lat: centerLat, lng: centerLng });
+  map.setZoom(targetZoom);
 }
 
 function openFrameExport() {
@@ -1608,6 +1649,7 @@ function initMap() {
     center: { lat: 37.13, lng: -113.48 },
     zoom: 13,
     mapTypeId: "satellite",
+    isFractionalZoomEnabled: true,
     disableDefaultUI: IS_PRINT_VIEW,
     clickableIcons: !IS_PRINT_VIEW,
     gestureHandling: IS_PRINT_VIEW ? "none" : "auto",
