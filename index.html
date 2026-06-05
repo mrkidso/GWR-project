@@ -871,6 +871,71 @@
     }
 
 
+
+    .export-fixed-scalebar {
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid rgba(20, 20, 20, 0.35);
+      box-sizing: border-box;
+      color: #000000;
+      display: none;
+      font-family: Arial, sans-serif;
+      gap: 8px;
+      padding: 5px 8px 6px;
+      pointer-events: none;
+      position: absolute;
+      z-index: 50000;
+    }
+
+    .export-fixed-scalebar.active {
+      align-items: flex-end;
+      display: inline-flex;
+    }
+
+    .export-fixed-scale-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .export-fixed-scale-labels {
+      align-items: flex-end;
+      display: flex;
+      font-size: 14px;
+      justify-content: space-between;
+      line-height: 1;
+    }
+
+    .export-fixed-scale-blocks {
+      border: 2px solid #000000;
+      box-sizing: border-box;
+      display: flex;
+      height: 18px;
+    }
+
+    .export-fixed-scale-blocks span {
+      flex: 1;
+    }
+
+    .export-fixed-scale-blocks span:nth-child(odd) {
+      background: #000000;
+    }
+
+    .export-fixed-scale-blocks span:nth-child(even) {
+      background: #ffffff;
+    }
+
+    .export-fixed-scale-units {
+      font-size: 14px;
+      line-height: 1;
+      padding-bottom: 2px;
+    }
+
+    body.is-exporting .map-label.scale-bar {
+      display: none !important;
+      opacity: 0 !important;
+      visibility: hidden !important;
+    }
+
     @page {
       margin: 0;
       size: 17in 11in;
@@ -933,6 +998,18 @@ if (new URLSearchParams(window.location.search).get("print") === "1") {
   <div class="export-download-status" id="exportDownloadStatus"></div>
 </div>
 <div class="print-page" aria-hidden="true">
+  <div id="exportFixedScaleBar" class="export-fixed-scalebar">
+    <div class="export-fixed-scale-stack">
+      <div class="export-fixed-scale-labels">
+        <span>0</span>
+        <span>1</span>
+      </div>
+      <div class="export-fixed-scale-blocks">
+        <span></span><span></span><span></span><span></span>
+      </div>
+    </div>
+    <div class="export-fixed-scale-units">Mile</div>
+  </div>
   <div class="frame-border"></div>
   <div class="frame-title-panel">
     <div class="frame-date frame-adjustable" id="frameDate" data-frame-id="frameDate" data-default-rotate="-90"></div>
@@ -1528,7 +1605,8 @@ async function downloadPrintMap() {
       windowWidth: pageWidthPx,
       windowHeight: pageHeightPx,
       ignoreElements: element => {
-        return element.classList?.contains("export-download-panel") ||
+        return (element.classList?.contains("map-label") && element.classList?.contains("scale-bar")) ||
+          element.classList?.contains("export-download-panel") ||
           element.classList?.contains("export-frame-button") ||
           element.classList?.contains("resize-handle") ||
           element.classList?.contains("frame-resize-handle") ||
@@ -1570,6 +1648,8 @@ async function downloadPrintMap() {
     alert("The export failed. If the satellite imagery blocked image capture, use the Browser Print / Save PDF button instead.");
   }
   finally {
+    document.body.classList.remove("is-exporting");
+    clearFixedExportScaleBar();
     window.setTimeout(() => setExportDownloadStatus(""), 3500);
   }
 }
@@ -2511,6 +2591,34 @@ function updateScaleBar() {
 
   const distanceLabel = scaleBar.querySelector(".dynamic-scale-distance");
   if (distanceLabel) distanceLabel.textContent = "1";
+}
+
+function prepareFixedExportScaleBar() {
+  const sourceBar = document.querySelector(".map-label.scale-bar");
+  const fixedBar = document.getElementById("exportFixedScaleBar");
+  const printPage = document.querySelector(".print-page");
+  const dynamicBar = document.getElementById("dynamic-scale-bar");
+
+  if (!sourceBar || !fixedBar || !printPage || !dynamicBar) return;
+
+  updateScaleBar();
+
+  const pageRect = printPage.getBoundingClientRect();
+  const sourceRect = sourceBar.getBoundingClientRect();
+
+  fixedBar.style.left = `${sourceRect.left - pageRect.left}px`;
+  fixedBar.style.top = `${sourceRect.top - pageRect.top}px`;
+
+  const scaleWidth = dynamicBar.style.getPropertyValue("--dynamic-scale-width") || "200px";
+  fixedBar.querySelector(".export-fixed-scale-labels").style.width = scaleWidth;
+  fixedBar.querySelector(".export-fixed-scale-blocks").style.width = scaleWidth;
+
+  fixedBar.classList.add("active");
+}
+
+function clearFixedExportScaleBar() {
+  const fixedBar = document.getElementById("exportFixedScaleBar");
+  if (fixedBar) fixedBar.classList.remove("active");
 }
 
 function getNiceFeetDistance(maxFeet) {
