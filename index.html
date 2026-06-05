@@ -871,8 +871,8 @@
     }
 
 
-
-    .export-fixed-scalebar {
+    .print-scale-bar {
+      align-items: flex-end;
       background: rgba(255, 255, 255, 0.92);
       border: 1px solid rgba(20, 20, 20, 0.35);
       box-sizing: border-box;
@@ -880,61 +880,61 @@
       display: none;
       font-family: Arial, sans-serif;
       gap: 8px;
+      left: 7.15in;
       padding: 5px 8px 6px;
-      pointer-events: none;
+      pointer-events: auto;
       position: absolute;
+      top: 9.90in;
       z-index: 50000;
     }
 
-    .export-fixed-scalebar.active,
-    body.is-exporting .export-fixed-scalebar {
-      align-items: flex-end;
+    body.print-view .print-scale-bar {
       display: inline-flex;
     }
 
-    .export-fixed-scale-stack {
+    body.print-view .map-label.scale-bar {
+      display: none !important;
+    }
+
+    .print-scale-stack {
       display: flex;
       flex-direction: column;
       gap: 2px;
     }
 
-    .export-fixed-scale-labels {
+    .print-scale-labels {
       align-items: flex-end;
       display: flex;
       font-size: 14px;
       justify-content: space-between;
       line-height: 1;
+      width: var(--print-scale-width, 2.55in);
     }
 
-    .export-fixed-scale-blocks {
+    .print-scale-blocks {
       border: 2px solid #000000;
       box-sizing: border-box;
       display: flex;
       height: 18px;
+      width: var(--print-scale-width, 2.55in);
     }
 
-    .export-fixed-scale-blocks span {
+    .print-scale-blocks span {
       flex: 1;
     }
 
-    .export-fixed-scale-blocks span:nth-child(odd) {
+    .print-scale-blocks span:nth-child(odd) {
       background: #000000;
     }
 
-    .export-fixed-scale-blocks span:nth-child(even) {
+    .print-scale-blocks span:nth-child(even) {
       background: #ffffff;
     }
 
-    .export-fixed-scale-units {
+    .print-scale-units {
       font-size: 14px;
       line-height: 1;
       padding-bottom: 2px;
-    }
-
-    body.is-exporting .map-label.scale-bar {
-      display: none !important;
-      opacity: 0 !important;
-      visibility: hidden !important;
     }
 
     @page {
@@ -999,17 +999,17 @@ if (new URLSearchParams(window.location.search).get("print") === "1") {
   <div class="export-download-status" id="exportDownloadStatus"></div>
 </div>
 <div class="print-page" aria-hidden="true">
-  <div id="exportFixedScaleBar" class="export-fixed-scalebar">
-    <div class="export-fixed-scale-stack">
-      <div class="export-fixed-scale-labels">
+  <div id="printScaleBar" class="print-scale-bar">
+    <div class="print-scale-stack">
+      <div class="print-scale-labels">
         <span>0</span>
         <span>1</span>
       </div>
-      <div class="export-fixed-scale-blocks">
+      <div class="print-scale-blocks">
         <span></span><span></span><span></span><span></span>
       </div>
     </div>
-    <div class="export-fixed-scale-units">Mile</div>
+    <div class="print-scale-units">Mile</div>
   </div>
   <div class="frame-border"></div>
   <div class="frame-title-panel">
@@ -1552,11 +1552,13 @@ function waitForExportReady() {
   return new Promise(resolve => {
     updateScaleBar();
     updateAllPhaseInsetLeaders();
+    updatePrintScaleBar();
 
     // Give Google imagery, labels, custom overlays, and inset maps time to finish drawing.
     window.setTimeout(() => {
       updateScaleBar();
       updateAllPhaseInsetLeaders();
+      updatePrintScaleBar();
       resolve();
     }, 1200);
   });
@@ -1606,7 +1608,7 @@ async function downloadPrintMap() {
       windowWidth: pageWidthPx,
       windowHeight: pageHeightPx,
       ignoreElements: element => {
-        return (element.classList && !element.classList.contains("export-fixed-scalebar") && element.classList.contains("map-label") && element.classList.contains("scale-bar")) ||
+        return (element.classList && element.classList.contains("map-label") && element.classList.contains("scale-bar")) ||
           element.classList?.contains("export-download-panel") ||
           element.classList?.contains("export-frame-button") ||
           element.classList?.contains("resize-handle") ||
@@ -1650,7 +1652,6 @@ async function downloadPrintMap() {
   }
   finally {
     document.body.classList.remove("is-exporting");
-    clearFixedExportScaleBar();
     window.setTimeout(() => setExportDownloadStatus(""), 3500);
   }
 }
@@ -2573,6 +2574,28 @@ function formatScaleDistance(miles) {
   return `${Number(miles.toFixed(2))}`;
 }
 
+
+function updatePrintScaleBar() {
+  const scaleBar = document.getElementById("printScaleBar");
+  if (!scaleBar || !map) return;
+
+  const center = map.getCenter();
+  const zoom = map.getZoom();
+  const mapDiv = document.getElementById("map");
+  if (!center || typeof zoom !== "number" || !mapDiv) return;
+
+  const latitude = center.lat();
+  const metersPerPixel = 156543.03392 * Math.cos(latitude * Math.PI / 180) / Math.pow(2, zoom);
+  const oneMilePixels = 1609.344 / metersPerPixel;
+
+  const mapWidthIn = parseFloat(getComputedStyle(mapDiv).width) / 96;
+  const mapWidthPx = mapDiv.clientWidth || parseFloat(getComputedStyle(mapDiv).width);
+  const pxToIn = mapWidthIn / mapWidthPx;
+
+  const oneMileInches = oneMilePixels * pxToIn;
+  scaleBar.style.setProperty("--print-scale-width", `${oneMileInches}in`);
+}
+
 function updateScaleBar() {
   const scaleBar = document.getElementById("dynamic-scale-bar");
   if (!scaleBar || !map) return;
@@ -2592,53 +2615,9 @@ function updateScaleBar() {
 
   const distanceLabel = scaleBar.querySelector(".dynamic-scale-distance");
   if (distanceLabel) distanceLabel.textContent = "1";
+  updatePrintScaleBar();
 }
 
-function prepareFixedExportScaleBar() {
-  const fixedBar = document.getElementById("exportFixedScaleBar");
-  const printPage = document.querySelector(".print-page");
-  if (!fixedBar || !printPage) return;
-
-  updateScaleBar();
-
-  const sourceBar = document.querySelector(".map-label.scale-bar");
-  const dynamicBar = document.getElementById("dynamic-scale-bar");
-  const pageRect = printPage.getBoundingClientRect();
-
-  let left = 700;
-  let top = 965;
-
-  if (sourceBar) {
-    const sourceRect = sourceBar.getBoundingClientRect();
-
-    if (
-      Number.isFinite(sourceRect.left) &&
-      Number.isFinite(sourceRect.top) &&
-      sourceRect.width > 10 &&
-      sourceRect.height > 10
-    ) {
-      left = sourceRect.left - pageRect.left;
-      top = sourceRect.top - pageRect.top;
-    }
-  }
-
-  fixedBar.style.left = `${left}px`;
-  fixedBar.style.top = `${top}px`;
-
-  const scaleWidth = dynamicBar?.style?.getPropertyValue("--dynamic-scale-width") || "230px";
-  const labelRow = fixedBar.querySelector(".export-fixed-scale-labels");
-  const blockRow = fixedBar.querySelector(".export-fixed-scale-blocks");
-
-  if (labelRow) labelRow.style.width = scaleWidth;
-  if (blockRow) blockRow.style.width = scaleWidth;
-
-  fixedBar.classList.add("active");
-}
-
-function clearFixedExportScaleBar() {
-  const fixedBar = document.getElementById("exportFixedScaleBar");
-  if (fixedBar) fixedBar.classList.remove("active");
-}
 
 function getNiceFeetDistance(maxFeet) {
   if (!Number.isFinite(maxFeet) || maxFeet <= 0) return 100;
@@ -2679,6 +2658,7 @@ function initDynamicScaleBarUpdates() {
   map.addListener("zoom_changed", () => window.setTimeout(updateScaleBar, 0));
   map.addListener("center_changed", () => window.setTimeout(updateScaleBar, 0));
   map.addListener("idle", updateScaleBar);
+  map.addListener("idle", updatePrintScaleBar);
   window.addEventListener("resize", updateScaleBar);
 
   window.setTimeout(updateScaleBar, 100);
