@@ -1502,9 +1502,13 @@ async function downloadPrintMap() {
 
   try {
     setExportDownloadStatus("Preparing high-resolution export...");
-    document.body.classList.add("is-exporting");
 
     await waitForExportReady();
+
+    // Hide editor handles only after all leader lines are locked in place.
+    document.body.classList.add("is-exporting");
+
+    updateAllPhaseInsetLeaders();
 
     const pageWidthPx = Math.round(17 * cssDpi);
     const pageHeightPx = Math.round(11 * cssDpi);
@@ -2052,9 +2056,14 @@ function updatePhaseInsetLeader(id) {
   const leader = phaseInsetLeaders[id];
   if (!leader) return;
 
+  const handleLeft = parseFloat(leader.handle.style.left || leader.handle.offsetLeft || 0);
+  const handleTop = parseFloat(leader.handle.style.top || leader.handle.offsetTop || 0);
+  const handleWidth = parseFloat(leader.handle.style.width || leader.handle.offsetWidth || 14) || 14;
+  const handleHeight = parseFloat(leader.handle.style.height || leader.handle.offsetHeight || 14) || 14;
+
   const targetPoint = {
-    x: leader.handle.offsetLeft + leader.handle.offsetWidth / 2,
-    y: leader.handle.offsetTop + leader.handle.offsetHeight / 2
+    x: handleLeft + handleWidth / 2,
+    y: handleTop + handleHeight / 2
   };
 
   const anchorPoint = getInsetAnchorPoint(leader.inset, targetPoint);
@@ -2140,8 +2149,8 @@ function enablePhaseInsetArrowHandleDrag(id, handle) {
 
     const up = () => {
       savePhaseInsetArrowPageTarget(id, {
-        x: handle.offsetLeft + handle.offsetWidth / 2,
-        y: handle.offsetTop + handle.offsetHeight / 2
+        x: parseFloat(handle.style.left || handle.offsetLeft || 0) + 7,
+        y: parseFloat(handle.style.top || handle.offsetTop || 0) + 7
       });
 
       updatePhaseInsetLeader(id);
