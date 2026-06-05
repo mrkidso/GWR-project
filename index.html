@@ -751,6 +751,26 @@
     }
 
 
+
+    .phase-inset-arrow-handle {
+      background: #1f2933;
+      border: 2px solid #ffffff;
+      border-radius: 50%;
+      box-shadow: 0 1px 5px rgba(0, 0, 0, 0.45);
+      box-sizing: border-box;
+      cursor: move;
+      display: none;
+      height: 14px;
+      pointer-events: auto;
+      position: absolute;
+      width: 14px;
+      z-index: 5;
+    }
+
+    body.print-view .phase-inset-arrow-handle {
+      display: block;
+    }
+
     @page {
       margin: 0;
       size: 17in 11in;
@@ -883,8 +903,8 @@ const EXHIBIT_POINTS = {
 };
 
 const PHASE_INSET_ARROW_DEFAULT_TARGETS = {
-  phase1: { lng: -113.5190, lat: 37.0840 },
-  phase2: { lng: -113.4990, lat: 37.0840 }
+  phase1: { offsetX: 34, offsetY: 34 },
+  phase2: { offsetX: 34, offsetY: 34 }
 };
 const ROUTE_MILES = {};
 const MILEAGE_ORIGIN_ID = "washingtonFieldsCommercial";
@@ -1459,6 +1479,7 @@ function enableFrameRotate(element, handle, id) {
 
 function resetFrameAdjustments() {
   localStorage.removeItem("gwrFrameAdjustments");
+  localStorage.removeItem("gwrPhaseInsetArrows");
   window.location.reload();
 }
 
@@ -1718,19 +1739,26 @@ function getInsetAnchorPoint(inset, targetPoint) {
   }, null);
 }
 
-function getPhaseInsetArrowTarget(id) {
+function getPhaseInsetArrowPageTarget(id, inset) {
+  const saved = getSavedPositions(PHASE_INSET_ARROW_STORAGE_KEY, id);
+  if (saved?.page && Number.isFinite(saved.page.x) && Number.isFinite(saved.page.y)) {
+    return saved.page;
+  }
 
-  // Ignore previously saved positions and always start
-  // from the nearby default locations.
+  const defaults = PHASE_INSET_ARROW_DEFAULT_TARGETS[id] || { offsetX: 34, offsetY: 34 };
 
-  return PHASE_INSET_ARROW_DEFAULT_TARGETS[id]
-    || EXHIBIT_POINTS[id]
-    || null;
+  return {
+    x: inset.offsetLeft + inset.offsetWidth + defaults.offsetX,
+    y: inset.offsetTop + inset.offsetHeight / 2 + defaults.offsetY
+  };
 }
 
-function savePhaseInsetArrowTarget(id, target) {
+function savePhaseInsetArrowPageTarget(id, pagePoint) {
   savePositions(PHASE_INSET_ARROW_STORAGE_KEY, id, {
-    target: normalizePoint(target)
+    page: {
+      x: pagePoint.x,
+      y: pagePoint.y
+    }
   });
 }
 
@@ -1738,7 +1766,11 @@ function updatePhaseInsetLeader(id) {
   const leader = phaseInsetLeaders[id];
   if (!leader) return;
 
-  const targetPoint = getPointRelativeToPrintPage(leader.marker.getPosition());
+  const targetPoint = {
+    x: leader.handle.offsetLeft + leader.handle.offsetWidth / 2,
+    y: leader.handle.offsetTop + leader.handle.offsetHeight / 2
+  };
+
   const anchorPoint = getInsetAnchorPoint(leader.inset, targetPoint);
   if (!targetPoint || !anchorPoint) return;
 
@@ -1756,9 +1788,10 @@ function initPhaseInsetLeaders() {
   if (!IS_PRINT_VIEW) return;
 
   const svg = ensurePhaseInsetLeaderLayer();
-  if (!svg) return;
+  const printPage = document.querySelector(".print-page");
+  if (!svg || !printPage) return;
+
   ensurePhaseInsetArrowMarker(svg);
-  ensureMainMapProjectionOverlay();
 
   PHASE_INSET_CONFIGS.forEach(config => {
     const inset = document.querySelector(`.phase-inset[data-phase-inset-id="${config.id}"]`);
@@ -1769,42 +1802,58 @@ function initPhaseInsetLeaders() {
     line.setAttribute("marker-end", "url(#phaseInsetArrowHead)");
     svg.appendChild(line);
 
-    const marker = new google.maps.Marker({
-      position: getPhaseInsetArrowTarget(config.id),
-      map: map,
-      draggable: true,
-      title: "Drag to move the inset arrow tip",
-      icon: {
-        path: google.maps.SymbolPath.CIRCLE,
-        scale: 5,
-        fillColor: "#1f2933",
-        fillOpacity: 0.85,
-        strokeColor: "#FFFFFF",
-        strokeOpacity: 1,
-        strokeWeight: 1.5
-      },
-      zIndex: LAYER_Z_INDEX.exhibit + 60
-    });
+    const pageTarget = getPhaseInsetArrowPageTarget(config.id, inset);
+    const handle = document.createElement("div");
+    handle.className = "phase-inset-arrow-handle";
+    handle.title = "Drag to move the inset arrow tip";
+    handle.style.left = `${pageTarget.x - 7}px`;
+    handle.style.top = `${pageTarget.y - 7}px`;
+    printPage.appendChild(handle);
 
-    marker.addListener("drag", event => {
-      savePhaseInsetArrowTarget(config.id, normalizePoint(event.latLng));
-      updatePhaseInsetLeader(config.id);
-    });
+    enablePhaseInsetArrowHandleDrag(config.id, handle);
 
-    marker.addListener("dragend", event => {
-      savePhaseInsetArrowTarget(config.id, normalizePoint(event.latLng));
-      updatePhaseInsetLeader(config.id);
-    });
-
-    phaseInsetLeaders[config.id] = { inset, line, marker };
+    phaseInsetLeaders[config.id] = { inset, line, handle };
+    updatePhaseInsetLeader(config.id);
   });
 
-  map.addListener("idle", updateAllPhaseInsetLeaders);
-  map.addListener("zoom_changed", () => window.setTimeout(updateAllPhaseInsetLeaders, 0));
-  map.addListener("center_changed", () => window.setTimeout(updateAllPhaseInsetLeaders, 0));
   window.addEventListener("resize", updateAllPhaseInsetLeaders);
   window.setTimeout(updateAllPhaseInsetLeaders, 100);
   window.setTimeout(updateAllPhaseInsetLeaders, 500);
+}
+
+function enablePhaseInsetArrowHandleDrag(id, handle) {
+  handle.addEventListener("mousedown", event => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const startMouse = { x: event.clientX, y: event.clientY };
+    const startLeft = handle.offsetLeft;
+    const startTop = handle.offsetTop;
+
+    const move = moveEvent => {
+      const nextLeft = startLeft + moveEvent.clientX - startMouse.x;
+      const nextTop = startTop + moveEvent.clientY - startMouse.y;
+
+      handle.style.left = `${nextLeft}px`;
+      handle.style.top = `${nextTop}px`;
+
+      updatePhaseInsetLeader(id);
+    };
+
+    const up = () => {
+      savePhaseInsetArrowPageTarget(id, {
+        x: handle.offsetLeft + handle.offsetWidth / 2,
+        y: handle.offsetTop + handle.offsetHeight / 2
+      });
+
+      updatePhaseInsetLeader(id);
+      document.removeEventListener("mousemove", move);
+      document.removeEventListener("mouseup", up);
+    };
+
+    document.addEventListener("mousemove", move);
+    document.addEventListener("mouseup", up);
+  });
 }
 
 
