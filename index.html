@@ -178,6 +178,58 @@ function isPointInRing(point, ring) {
   return inside;
 }
 
+function isPointInFeature(point, feature) {
+  return getFeatureRings(feature).some(ring => isPointInRing(point, ring));
+}
+
+function getBoundsCenter(bounds) {
+  return {
+    lng: (bounds.minLng + bounds.maxLng) / 2,
+    lat: (bounds.minLat + bounds.maxLat) / 2
+  };
+}
+
+function getBoundsIntersection(first, second) {
+  const bounds = {
+    minLng: Math.max(first.minLng, second.minLng),
+    minLat: Math.max(first.minLat, second.minLat),
+    maxLng: Math.min(first.maxLng, second.maxLng),
+    maxLat: Math.min(first.maxLat, second.maxLat)
+  };
+
+  if (bounds.minLng > bounds.maxLng || bounds.minLat > bounds.maxLat) return null;
+  return bounds;
+}
+
+function getFeatureCenterInsideBounds(feature, bounds) {
+  const visibleBounds = getBoundsIntersection(getFeatureBounds(feature), bounds);
+
+  if (!visibleBounds) return null;
+
+  const columns = 24;
+  const rows = 24;
+  const points = [];
+
+  for (let column = 0; column <= columns; column++) {
+    for (let row = 0; row <= rows; row++) {
+      const point = {
+        lng: visibleBounds.minLng + (visibleBounds.maxLng - visibleBounds.minLng) * column / columns,
+        lat: visibleBounds.minLat + (visibleBounds.maxLat - visibleBounds.minLat) * row / rows
+      };
+
+      if (isPointInFeature(point, feature)) points.push(point);
+    }
+  }
+
+  if (points.length === 0) return getBoundsCenter(visibleBounds);
+
+  return points.reduce((center, point) => {
+    center.lng += point.lng / points.length;
+    center.lat += point.lat / points.length;
+    return center;
+  }, { lng: 0, lat: 0 });
+}
+
 function addOpenSpaceHatch(feature) {
   getFeatureRings(feature).forEach(ring => {
     const bounds = getFeatureBounds({ geometry: { type: "Polygon", coordinates: [ring] } });
@@ -217,6 +269,24 @@ function addHatchSegment(path) {
     strokeWeight: 1,
     clickable: false,
     zIndex: LAYER_Z_INDEX.default + 1
+  });
+}
+
+function getGeoJsonBounds(data) {
+  return data.features.reduce((bounds, feature) => {
+    const featureBounds = getFeatureBounds(feature);
+
+    return {
+      minLng: Math.min(bounds.minLng, featureBounds.minLng),
+      minLat: Math.min(bounds.minLat, featureBounds.minLat),
+      maxLng: Math.max(bounds.maxLng, featureBounds.maxLng),
+      maxLat: Math.max(bounds.maxLat, featureBounds.maxLat)
+    };
+  }, {
+    minLng: Infinity,
+    minLat: Infinity,
+    maxLng: -Infinity,
+    maxLat: -Infinity
   });
 }
 
@@ -356,7 +426,7 @@ labelPolygonsByField("alaia.geojson", "landusecode", {
   }
 });
   loadGLWLongValleyLayer();
-  labelPolygonsByField("GLW_Long_Valley_trails.geojson", "landusecode");
+  labelGLWLongValleyLayer();
 
   loadLayer("Long_Valley_trails.geojson", {
     strokeColor: "#FFA500",
@@ -473,6 +543,24 @@ function loadGLWLongValleyLayer() {
         .filter(feature => feature.properties.landusecode === "OS")
         .forEach(addOpenSpaceHatch);
     });
+}
+
+function labelGLWLongValleyLayer() {
+  Promise.all([
+    fetch("GLW_Long_Valley_trails.geojson").then(response => response.json()),
+    fetch("bounding Box.geojson").then(response => response.json())
+  ]).then(([glwData, boundsData]) => {
+    const printBounds = getGeoJsonBounds(boundsData);
+
+    glwData.features.forEach(feature => {
+      if (!shouldLabelFeature(feature, "landusecode", {})) return;
+
+      const labelText = String(feature.properties.landusecode || "");
+      const center = getFeatureCenterInsideBounds(feature, printBounds) || getFeatureLabelCenter(feature);
+
+      addMapLabel(labelText, center);
+    });
+  });
 }
 
 function loadRoadsLayer() {
