@@ -537,6 +537,95 @@
       top: 8px;
     }
 
+    .phase-inset {
+      background: rgba(255, 255, 255, 0.96);
+      border: 2px solid rgba(17, 24, 39, 0.9);
+      border-radius: 4px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.28);
+      box-sizing: border-box;
+      display: none;
+      font-family: Arial, sans-serif;
+      overflow: hidden;
+      position: absolute;
+      z-index: 4;
+    }
+
+    body.print-view .phase-inset {
+      display: block;
+    }
+
+    .phase-inset.phase-one {
+      height: 1.95in;
+      left: 8.60in;
+      top: 2.25in;
+      width: 2.75in;
+    }
+
+    .phase-inset.phase-two {
+      height: 2.25in;
+      left: 10.35in;
+      top: 4.10in;
+      width: 3.35in;
+    }
+
+    .phase-inset-map {
+      bottom: 0;
+      left: 0;
+      position: absolute;
+      right: 0;
+      top: 0.34in;
+    }
+
+    .phase-inset-title {
+      align-items: center;
+      background: rgba(255, 255, 255, 0.96);
+      border-bottom: 1px solid rgba(17, 24, 39, 0.45);
+      box-sizing: border-box;
+      color: #111827;
+      display: flex;
+      font-size: 10px;
+      font-weight: 700;
+      gap: 0.06in;
+      height: 0.34in;
+      justify-content: space-between;
+      left: 0;
+      line-height: 1.1;
+      padding: 0.04in 0.07in;
+      position: absolute;
+      right: 0;
+      top: 0;
+      z-index: 2;
+    }
+
+    .phase-inset-note {
+      font-size: 8px;
+      font-weight: 700;
+      text-align: right;
+    }
+
+    .inset-map-label {
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid rgba(31, 41, 51, 0.42);
+      border-radius: 3px;
+      color: #111827;
+      font-family: Arial, sans-serif;
+      font-size: 9px;
+      font-weight: 700;
+      line-height: 1.15;
+      padding: 2px 4px;
+      position: absolute;
+      text-align: center;
+      transform: translate(-50%, -50%);
+      white-space: nowrap;
+    }
+
+    .inset-map-label.measurement {
+      background: rgba(255, 249, 196, 0.95);
+      border-color: rgba(111, 78, 0, 0.72);
+      font-size: 8px;
+      padding: 1px 3px;
+    }
+
     @page {
       margin: 0;
       size: 17in 11in;
@@ -578,6 +667,20 @@ if (new URLSearchParams(window.location.search).get("print") === "1") {
       </div>
     </div>
   </div>
+  <div class="phase-inset phase-one">
+    <div class="phase-inset-title">
+      <span>Phase 1</span>
+      <span class="phase-inset-note">GWB corridor</span>
+    </div>
+    <div id="phase1InsetMap" class="phase-inset-map"></div>
+  </div>
+  <div class="phase-inset phase-two">
+    <div class="phase-inset-title">
+      <span>Phase 2</span>
+      <span class="phase-inset-note">Opened June 2024</span>
+    </div>
+    <div id="phase2InsetMap" class="phase-inset-map"></div>
+  </div>
 </div>
 <div id="map"></div>
 
@@ -598,6 +701,19 @@ const PHASE_ROAD_IDS = {
   phase1: new Set([115015, 115016]),
   phase2: new Set([506, 122218])
 };
+
+const PHASE_INSET_CONFIGS = [
+  {
+    id: "phase1",
+    mapElementId: "phase1InsetMap",
+    roadIds: PHASE_ROAD_IDS.phase1
+  },
+  {
+    id: "phase2",
+    mapElementId: "phase2InsetMap",
+    roadIds: PHASE_ROAD_IDS.phase2
+  }
+];
 
 const EXHIBIT_POINTS = {
   washingtonFieldsCommercial: { lng: -113.4866, lat: 37.0830 },
@@ -1586,8 +1702,6 @@ function formatMileage(destinationId) {
 
 function addExhibitLabels() {
   addCallout({ lng: -113.5685, lat: 37.0884 }, EXHIBIT_POINTS.phase3, `Phase 3 / Crosby Way<br>${formatMileage("phase3")}<br>Began Feb. 2026<br>Completion July 2027`, "phase callout", "phase3");
-  addCallout({ lng: -113.5148, lat: 37.0894 }, EXHIBIT_POINTS.phase1, "Phase 1<br>GWB corridor", "phase", "phase1");
-  addCallout({ lng: -113.4746, lat: 37.0748 }, { lng: -113.4866, lat: 37.0833 }, "Phase 2<br>Opened June 2024", "phase", "phase2");
   addCallout({ lng: -113.4734, lat: 37.0998 }, EXHIBIT_POINTS.longValleyTrails, `Long Valley Trails PCD<br>${formatMileage("longValleyTrails")}<br>Connection timing:<br>approx. 9-10 months`, "callout", "longValleyTrails");
   addCallout({ lng: -113.5077, lat: 37.0577 }, EXHIBIT_POINTS.alaia, `Alaia PCD<br>${formatMileage("alaia")}`, "callout", "alaia");
   addCallout({ lng: -113.4820, lat: 37.0468 }, EXHIBIT_POINTS.ara, `ARA Southwest Logistics Center<br>${formatMileage("ara")}<br>Planned: approx. 5M SF<br>Completed: approx. 350K SF<br>2025-2026 construction: approx. 900K SF`, "callout", "ara");
@@ -1708,6 +1822,197 @@ function addRoadWidthMeasurements() {
           });
         });
     });
+}
+
+function addInsetHtmlMapLabel(targetMap, position, html, className = "") {
+  const overlay = new google.maps.OverlayView();
+  const labelPosition = normalizePoint(position);
+  let div;
+
+  overlay.onAdd = function() {
+    div = document.createElement("div");
+    div.className = `inset-map-label ${className}`.trim();
+    div.innerHTML = html;
+    this.getPanes().floatPane.appendChild(div);
+  };
+
+  overlay.draw = function() {
+    const projection = this.getProjection();
+    if (!projection || !div) return;
+
+    const point = projection.fromLatLngToDivPixel(new google.maps.LatLng(labelPosition.lat, labelPosition.lng));
+    if (!point) return;
+
+    div.style.left = `${point.x}px`;
+    div.style.top = `${point.y}px`;
+  };
+
+  overlay.onRemove = function() {
+    if (div) div.remove();
+  };
+
+  overlay.setMap(targetMap);
+  return overlay;
+}
+
+function addRoadWidthMeasurementsToMap(targetMap, features, roadIds) {
+  features
+    .filter(feature => roadIds.has(feature.properties.objectid))
+    .forEach(feature => {
+      getRoadWidthSamples(feature).forEach(sample => {
+        const path = [
+          { lng: sample.lng, lat: sample.startLat },
+          { lng: sample.lng, lat: sample.endLat }
+        ];
+
+        new google.maps.Polyline({
+          path: path,
+          map: targetMap,
+          strokeColor: "#FFF176",
+          strokeOpacity: 1,
+          strokeWeight: 2,
+          clickable: false,
+          zIndex: LAYER_Z_INDEX.exhibit + 20
+        });
+
+        addInsetHtmlMapLabel(targetMap, {
+          lng: sample.lng,
+          lat: (sample.startLat + sample.endLat) / 2
+        }, `${sample.feet} ft`, "measurement");
+      });
+    });
+}
+
+function getFeaturesBounds(features) {
+  return features.reduce((bounds, feature) => {
+    const featureBounds = getFeatureBounds(feature);
+
+    return {
+      minLng: Math.min(bounds.minLng, featureBounds.minLng),
+      minLat: Math.min(bounds.minLat, featureBounds.minLat),
+      maxLng: Math.max(bounds.maxLng, featureBounds.maxLng),
+      maxLat: Math.max(bounds.maxLat, featureBounds.maxLat)
+    };
+  }, {
+    minLng: Infinity,
+    minLat: Infinity,
+    maxLng: -Infinity,
+    maxLat: -Infinity
+  });
+}
+
+function padBounds(bounds, paddingFactor = 0.32) {
+  const lngPadding = (bounds.maxLng - bounds.minLng) * paddingFactor || 0.001;
+  const latPadding = (bounds.maxLat - bounds.minLat) * paddingFactor || 0.001;
+
+  return {
+    minLng: bounds.minLng - lngPadding,
+    minLat: bounds.minLat - latPadding,
+    maxLng: bounds.maxLng + lngPadding,
+    maxLat: bounds.maxLat + latPadding
+  };
+}
+
+function fitMapToDataBounds(targetMap, bounds) {
+  const padded = padBounds(bounds);
+  const googleBounds = new google.maps.LatLngBounds(
+    { lat: padded.minLat, lng: padded.minLng },
+    { lat: padded.maxLat, lng: padded.maxLng }
+  );
+
+  targetMap.fitBounds(googleBounds, 8);
+}
+
+function addInsetRoadLayer(targetMap, roadsData, activeRoadIds) {
+  const layer = new google.maps.Data({ map: targetMap });
+  layer.addGeoJson(roadsData);
+  layer.setStyle(feature => {
+    const objectId = feature.getProperty("objectid");
+    const phase = getRoadPhase(objectId);
+    const phaseStyle = activeRoadIds.has(objectId) ? getRoadPhaseStyle(phase) : null;
+
+    if (phaseStyle) {
+      return {
+        ...phaseStyle,
+        strokeWeight: 3,
+        fillOpacity: 0.9,
+        clickable: false
+      };
+    }
+
+    const surfaceType = feature.getProperty("surftype");
+    const color = surfaceType === "Concrete" ? "#E1E1E1" : "#9C9C9C";
+
+    return {
+      strokeColor: color,
+      strokeWeight: 1,
+      strokeOpacity: 0.95,
+      fillColor: color,
+      fillOpacity: 0.86,
+      zIndex: LAYER_Z_INDEX.roads,
+      clickable: false
+    };
+  });
+
+  return layer;
+}
+
+function addInsetCityLayer(targetMap, cityData) {
+  const layer = new google.maps.Data({ map: targetMap });
+  layer.addGeoJson(cityData);
+  layer.setStyle({
+    strokeColor: "#FF0000",
+    strokeWeight: 2,
+    strokeOpacity: 1,
+    fillOpacity: 0,
+    clickable: false,
+    zIndex: LAYER_Z_INDEX.city
+  });
+}
+
+function createPhaseInsetMap(config, roadsData, cityData) {
+  const mapElement = document.getElementById(config.mapElementId);
+  if (!mapElement) return;
+
+  const insetMap = new google.maps.Map(mapElement, {
+    center: { lat: 37.09, lng: -113.50 },
+    zoom: 15,
+    mapTypeId: "satellite",
+    disableDefaultUI: true,
+    clickableIcons: false,
+    draggable: false,
+    gestureHandling: "none",
+    isFractionalZoomEnabled: true,
+    keyboardShortcuts: false,
+    scrollwheel: false,
+    tilt: 0
+  });
+
+  addInsetRoadLayer(insetMap, roadsData, config.roadIds);
+  addInsetCityLayer(insetMap, cityData);
+
+  const phaseFeatures = (roadsData.features || []).filter(feature => config.roadIds.has(feature.properties.objectid));
+  if (phaseFeatures.length > 0) {
+    const phaseBounds = getFeaturesBounds(phaseFeatures);
+    fitMapToDataBounds(insetMap, phaseBounds);
+    addRoadWidthMeasurementsToMap(insetMap, phaseFeatures, config.roadIds);
+
+    google.maps.event.addListenerOnce(insetMap, "idle", () => {
+      google.maps.event.trigger(insetMap, "resize");
+      fitMapToDataBounds(insetMap, phaseBounds);
+    });
+  }
+}
+
+function addPhaseInsetMaps() {
+  if (!IS_PRINT_VIEW) return;
+
+  Promise.all([
+    fetch("roads.geojson").then(response => response.json()),
+    fetch("city.geojson").then(response => response.json())
+  ]).then(([roadsData, cityData]) => {
+    PHASE_INSET_CONFIGS.forEach(config => createPhaseInsetMap(config, roadsData, cityData));
+  });
 }
 
 
@@ -1868,7 +2173,7 @@ function loadExhibitAnnotations() {
     })
     .finally(() => {
       addExhibitLabels();
-      addRoadWidthMeasurements();
+      addPhaseInsetMaps();
     });
 }
 
